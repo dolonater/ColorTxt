@@ -1,6 +1,6 @@
 # <img src="./resources/icon.png" width="32"> 彩读｜ColorTxt
 
-一款会给内容上色的本地TXT小说阅读器，带给你不一样的阅读体验！还有章节识别、空行压缩、行首缩进、摸鱼快捷键等功能。支持 **macOS** 和 **Windows**。
+一款会给内容上色的 **本地 TXT 小说阅读器**，带给你不一样的阅读体验！还有章节识别、空行压缩、行首缩进、摸鱼快捷键等功能。支持 **macOS** 和 **Windows**。
 
 <img src="./images/screenshot.jpg" width="600">
 
