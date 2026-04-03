@@ -305,7 +305,7 @@ src/
 
 ### 顶栏 UI
 
-全屏时 `AppHeader` 传入 `inFullscreen`；**「切换侧栏」**图标按钮使用 `v-if="!inFullscreen"` 隐藏，避免与左缘感应侧栏重复。
+全屏时 `AppHeader` 传入 `inFullscreen`；**「切换侧栏」** 图标按钮使用 `v-if="!inFullscreen"` 隐藏，避免与左缘感应侧栏重复。
 
 ### 全屏正文宽度与两侧空白滚轮
 
