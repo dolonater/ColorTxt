@@ -81,6 +81,21 @@ git tag -d v1.0.0
 git push origin :refs/tags/v1.0.0
 ```
 
+### 发布新版本
+
+```bash
+# 将改动提交到本地仓库
+git commit -a -m "修改了xxx"
+
+# 更新版本号
+npm version patch|minor|major
+
+# 将本地仓库的改动推送到远程仓库
+git push
+```
+
+后面走发布流程。
+
 ### 项目结构
 
 仓库根目录常用目录与文件：
