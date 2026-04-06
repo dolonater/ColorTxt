@@ -302,11 +302,7 @@ function onFileContextMenuSelect(actionId: string) {
           v-if="!isEditingFileList"
           type="button"
           class="link hoverDanger sidebarTabFooterAction"
-          :class="{
-            'sidebarTabFooterAction--hidden': !!fileFilterQuery.trim(),
-          }"
-          :tabindex="fileFilterQuery.trim() ? -1 : 0"
-          :aria-hidden="fileFilterQuery.trim() ? true : undefined"
+          :disabled="!!fileFilterQuery.trim()"
           @click="emit('clearFileList')"
         >
           清空
@@ -470,9 +466,5 @@ function onFileContextMenuSelect(actionId: string) {
 }
 .sidebarTabFooterAction {
   flex-shrink: 0;
-}
-.sidebarTabFooterAction--hidden {
-  visibility: hidden;
-  pointer-events: none;
 }
 </style>

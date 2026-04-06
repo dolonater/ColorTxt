@@ -21,6 +21,16 @@ function waitNextPaintFrame(): Promise<void> {
   });
 }
 
+/**
+ * 流结束时 `restorePhys >= totalPhysical` 会走 `scrollToBottom`（见 useAppWindowBindings）。
+ * 用于已读完（100%）时跳过可能因窗口缩放而失准的 Monaco viewState / 行号恢复。
+ */
+const RESTORE_PHYSICAL_LINE_SCROLL_TO_END = Number.MAX_SAFE_INTEGER;
+
+function isReadingCompleteProgress(progress: number | undefined): boolean {
+  return typeof progress === "number" && Number.isFinite(progress) && progress >= 100;
+}
+
 type Persistence = ReturnType<typeof useAppPersistence>;
 type ChapterSync = ReturnType<typeof useAppChapterListSync>;
 type Stream = ReturnType<typeof useTxtStreamPipeline>;
@@ -207,7 +217,11 @@ export function useAppFileSession(deps: {
         typeof savedVs === "object" &&
         !Array.isArray(savedVs) &&
         hasAnchor;
-      if (canRestoreViewState) {
+      if (isReadingCompleteProgress(meta?.progress)) {
+        deps.pendingRestoreEditorViewState.value = null;
+        deps.pendingRestoreViewportTopPhysicalLine.value = null;
+        deps.pendingRestorePhysicalLine.value = RESTORE_PHYSICAL_LINE_SCROLL_TO_END;
+      } else if (canRestoreViewState) {
         deps.pendingRestoreEditorViewState.value = savedVs;
         deps.pendingRestorePhysicalLine.value = null;
         deps.pendingRestoreViewportTopPhysicalLine.value = Math.max(
@@ -359,6 +373,10 @@ export function useAppFileSession(deps: {
         options?.restorePhysicalLine != null
           ? Math.max(1, Math.floor(options.restorePhysicalLine))
           : normalizedExplicitRestore!;
+    } else if (isReadingCompleteProgress(meta?.progress)) {
+      deps.pendingRestoreEditorViewState.value = null;
+      deps.pendingRestoreViewportTopPhysicalLine.value = null;
+      deps.pendingRestorePhysicalLine.value = RESTORE_PHYSICAL_LINE_SCROLL_TO_END;
     } else if (canRestoreViewState) {
       deps.pendingRestoreEditorViewState.value = savedVs;
       deps.pendingRestorePhysicalLine.value = null;
