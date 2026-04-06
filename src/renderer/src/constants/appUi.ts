@@ -7,8 +7,7 @@ export {
   defaultReaderPaletteLight,
 } from "./readerPalette";
 
-/** 界面展示用中文名（窗口标题、关于等） */
-export const APP_DISPLAY_NAME = "彩读";
+export { APP_DISPLAY_NAME } from "@shared/appDisplayName";
 
 export const GITHUB_REPO_URL = "https://github.com/ssnangua/ColorTxt";
 

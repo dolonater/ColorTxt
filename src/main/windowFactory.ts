@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from "electron";
 import { stat } from "node:fs/promises";
 import path from "node:path";
+import { APP_DISPLAY_NAME } from "@shared/appDisplayName";
 import {
   resolveInitialWindowBounds,
   saveWindowBounds,
@@ -80,7 +81,7 @@ export function createMainWindowFactory(maps: MainWindowMaps): CreateMainWindow 
       }
     });
 
-    win.setTitle("彩读");
+    win.setTitle(APP_DISPLAY_NAME);
 
     if (openTxtPath) {
       const resolved = path.resolve(openTxtPath);
