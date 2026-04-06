@@ -8,9 +8,7 @@ import {
   registerChapterStickyScrollProviders,
 } from "../monaco/chapterStickyScroll";
 import {
-  applyReaderInlineDecorationColors,
   buildChapterTitleDecorations,
-  READER_TXTR_LIGHT_THEME,
   setReaderSyntaxHighlightEnabled,
 } from "../monaco/readerInlineDecorations";
 import {
@@ -300,17 +298,13 @@ function setChapters(chapters: ChapterStickyLine[]) {
 
 function setTheme(themeName: string) {
   lastAppThemeName = themeName;
-  let monacoThemeId = "vs-dark";
   if (themeName === "vs") {
-    monacoThemeId = READER_TXTR_LIGHT_THEME;
-    monaco.editor.setTheme(monacoThemeId);
+    monaco.editor.setTheme("vs");
   } else if (builtInThemes.has(themeName)) {
-    monacoThemeId = themeName;
     monaco.editor.setTheme(themeName);
   } else {
     monaco.editor.setTheme("vs-dark");
   }
-  applyReaderInlineDecorationColors(monacoThemeId);
 }
 
 function setFontSize(fontSize: number) {
@@ -774,7 +768,6 @@ onMounted(() => {
   model.value = m;
 
   ensureStickyChapterBarClickDisabled();
-  applyReaderInlineDecorationColors(READER_TXTR_LIGHT_THEME);
 
   editor.value = monaco.editor.create(editorEl.value!, {
     model: m,
@@ -887,5 +880,16 @@ onBeforeUnmount(() => {
 :deep(.monaco-editor .scroll-decoration) {
   box-shadow: none !important;
   display: none !important;
+}
+
+/* 与 chapterStickyScroll.CHAPTER_TITLE_LINE_CLASS（chapterTitleLine）一致 */
+:deep(.monaco-editor .chapterTitleLine) {
+  color: var(--reader-chapter-title) !important;
+  font-size: 2em !important;
+}
+:deep(.monaco-editor span:has(> .chapterTitleLine)) {
+  display: inline-block;
+  transform-origin: left;
+  transform: scale(0.6);
 }
 </style>

@@ -1,5 +1,12 @@
 import { readerEditorLineHeight } from "../monaco/readerEditorOptions";
 
+export type { ReaderSurfacePalette } from "./readerPalette";
+export {
+  applyReaderSurfaceToDocument,
+  defaultReaderPaletteDark,
+  defaultReaderPaletteLight,
+} from "./readerPalette";
+
 /** 界面展示用中文名（窗口标题、关于等） */
 export const APP_DISPLAY_NAME = "彩读";
 

@@ -154,11 +154,13 @@ src/
         │   ├── useReaderSidebarLists.ts   # 侧栏文件/章节/书签虚拟列表、过滤与滚动同步
         │   └── useTxtStreamPipeline.ts    # 大文件流式解析：物理行/显示行映射、章节累加、空行压缩与章节留白标准化；正文在缓冲区累积，流结束再一次性 setFullText/setChapters（见 `ipcHandlers` 小节「渲染进程与 Monaco 写入」）
         ├── constants/
-        │   └── appUi.ts      # UI 常量：存储 key（含 `skipUnloadPersistenceSessionKey`）、侧栏宽度、字号/行高上下限与步进、`default*` 出厂默认（无本地设置或与 `persistKey` 字段缺失时；见下文「阅读器字号与行高」「界面与阅读偏好默认值」）
+        │   ├── appUi.ts          # UI 常量：存储 key、侧栏宽度、字号/行高上下限与步进、`default*` 出厂默认等（无本地设置或与 `persistKey` 字段缺失时；见下文
+        「阅读器字号与行高」「界面与阅读偏好默认值」）；re-export `readerPalette` 的 `applyReaderSurfaceToDocument` 等
+        │   └── readerPalette.ts  # 阅读器表面色（背景、章节标题、Monaco txtr token）默认值；`useAppShellThemeWatch` 将其写入 `html` 的 `--reader-bg`、`--reader-chapter-title`
         ├── monaco/           # Monaco 阅读器扩展（与 ReaderMain 配合）
         │   ├── chapterStickyScroll.ts    # 注册折叠区与文档符号以驱动黏性章节大纲；禁用黏性条点击跳转
         │   ├── readerEditorOptions.ts    # 阅读器 `create` / `updateOptions` 的选项构建（换行、只读、查找、stickyScroll 等）
-        │   ├── readerInlineDecorations.ts # 章节标题行内装饰与阅读主题配色；语法高亮开关时同步 Monarch 主题色
+        │   ├── readerInlineDecorations.ts # 章节标题行内装饰；Monarch 主题色来自 `readerPalette`，`vs`/`vs-dark` 透明背景透出 `--reader-bg`
         │   ├── readerKeyScroll.ts        # 方向键/Page 键滚动
         │   └── txtrTextMonarch.ts        # 自定义 Monarch：`txtr-text` 语言，标点/对话/数字等着色规则
         ├── reader/

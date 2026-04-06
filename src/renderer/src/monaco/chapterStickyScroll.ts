@@ -19,6 +19,17 @@ export function ensureStickyChapterBarClickDisabled(): void {
   el.textContent = `
 .monaco-editor .sticky-widget {
   pointer-events: none !important;
+  background-color: var(--reader-bg) !important;
+}
+/* 子区域仍用 VS Code 变量；编辑器背景透明后需与阅读区底色一致，避免透出正文 */
+.monaco-editor .sticky-widget .sticky-widget-line-numbers {
+  background-color: var(--reader-bg) !important;
+}
+.monaco-editor .sticky-widget .sticky-widget-lines-scrollable {
+  background-color: var(--reader-bg) !important;
+}
+.monaco-editor .sticky-widget .sticky-line-content:hover {
+  background-color: var(--reader-bg) !important;
 }
 `;
   document.head.appendChild(el);

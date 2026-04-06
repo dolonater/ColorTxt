@@ -1,132 +1,81 @@
 import type * as monaco from "monaco-editor";
 import {
+  defaultReaderPaletteDark,
+  defaultReaderPaletteLight,
+  type ReaderSurfacePalette,
+} from "../constants/readerPalette";
+import {
   CHAPTER_TITLE_LINE_CLASS,
   type ChapterStickyLine,
 } from "./chapterStickyScroll";
 
-/** 亮色阅读主题 id（与 ReaderMain 一致） */
-export const READER_TXTR_LIGHT_THEME = "txtr-light";
-
-/** 暗色主题下章节标题颜色（Monarch 标点/引号内由 theme rules 着色） */
-export const readerInlineDecorationColorsDark = {
-  chapterTitle: "#569cd6",
-  punctuation: "#4ec9b0",
-  specialMarker: "#f56c6c",
-  quotePairInner: "#ce9178",
-  number: "#dcdcaa",
-  english: "#c586c0",
-  bracketInner: "#9cdcfe",
-} as const;
-
-/** 亮色主题下章节标题颜色 */
-export const readerInlineDecorationColorsLight = {
-  chapterTitle: "#b88230",
-  punctuation: "#267f99",
-  specialMarker: "#f56c6c",
-  quotePairInner: "#a31515",
-  number: "#795e26",
-  english: "#af00db",
-  bracketInner: "#001080",
-} as const;
-
-const STYLE_ID = "txtr-reader-inline-decoration-colors";
-
-function isLightMonacoTheme(themeId: string): boolean {
-  return themeId === "vs" || themeId === READER_TXTR_LIGHT_THEME;
-}
+const EDITOR_BACKGROUND_TRANSPARENT = "#00000000";
 
 function hexForThemeRule(hexWithHash: string): string {
   return hexWithHash.replace(/^#/, "");
 }
 
+/** 与 txtrTextMonarch 一致：quoteInner / bracketInner 为兜底 token；语义优先级由词法规则顺序保证 */
+function buildTxtrTokenRules(palette: ReaderSurfacePalette) {
+  return [
+    {
+      token: "txtr.quoteInner",
+      foreground: hexForThemeRule(palette.txtrQuoteInner),
+    },
+    {
+      token: "txtr.bracketInner",
+      foreground: hexForThemeRule(palette.txtrBracketInner),
+    },
+    {
+      token: "txtr.punctuation",
+      foreground: hexForThemeRule(palette.txtrPunctuation),
+    },
+    {
+      token: "txtr.specialMarker",
+      foreground: hexForThemeRule(palette.txtrSpecialMarker),
+    },
+    {
+      token: "txtr.number",
+      foreground: hexForThemeRule(palette.txtrNumber),
+    },
+    {
+      token: "txtr.english",
+      foreground: hexForThemeRule(palette.txtrEnglish),
+    },
+  ];
+}
+
 /**
- * 注入 vs-dark / txtr-light 的 Monarch token 颜色，并保留自定义浅色背景。
- * 应在注册 Monarch 之后、setTheme 之前调用一次；主题切换时也可调用以同步颜色常量。
+ * 注入 vs / vs-dark 的 Monarch token 颜色；编辑器背景透明以透出 var(--reader-bg)。
+ * 应在注册 Monarch 之后、setTheme 之前调用一次；调色板变更时可再调用。
  */
 export function ensureReaderSyntaxThemes(
   monacoApi: typeof import("monaco-editor"),
 ): void {
-  const dark = readerInlineDecorationColorsDark;
-  const light = readerInlineDecorationColorsLight;
-  // 与 txtrTextMonarch 一致：quoteInner / bracketInner 为兜底 token；语义优先级由词法规则顺序保证
-  const tokenRulesDark = [
-    {
-      token: "txtr.quoteInner",
-      foreground: hexForThemeRule(dark.quotePairInner),
-    },
-    {
-      token: "txtr.bracketInner",
-      foreground: hexForThemeRule(dark.bracketInner),
-    },
-    {
-      token: "txtr.punctuation",
-      foreground: hexForThemeRule(dark.punctuation),
-    },
-    {
-      token: "txtr.specialMarker",
-      foreground: hexForThemeRule(dark.specialMarker),
-    },
-    {
-      token: "txtr.number",
-      foreground: hexForThemeRule(dark.number),
-    },
-    {
-      token: "txtr.english",
-      foreground: hexForThemeRule(dark.english),
-    },
-  ];
-  const tokenRulesLight = [
-    {
-      token: "txtr.quoteInner",
-      foreground: hexForThemeRule(light.quotePairInner),
-    },
-    {
-      token: "txtr.bracketInner",
-      foreground: hexForThemeRule(light.bracketInner),
-    },
-    {
-      token: "txtr.punctuation",
-      foreground: hexForThemeRule(light.punctuation),
-    },
-    {
-      token: "txtr.specialMarker",
-      foreground: hexForThemeRule(light.specialMarker),
-    },
-    {
-      token: "txtr.number",
-      foreground: hexForThemeRule(light.number),
-    },
-    {
-      token: "txtr.english",
-      foreground: hexForThemeRule(light.english),
-    },
-  ];
-
+  const transparent = { "editor.background": EDITOR_BACKGROUND_TRANSPARENT };
   monacoApi.editor.defineTheme("vs-dark", {
     base: "vs-dark",
     inherit: true,
-    rules: tokenRulesDark,
-    colors: {},
+    rules: buildTxtrTokenRules(defaultReaderPaletteDark),
+    colors: transparent,
   });
-
-  monacoApi.editor.defineTheme(READER_TXTR_LIGHT_THEME, {
+  monacoApi.editor.defineTheme("vs", {
     base: "vs",
     inherit: true,
-    rules: tokenRulesLight,
-    colors: {
-      "editor.background": "#f4ead7",
-    },
+    rules: buildTxtrTokenRules(defaultReaderPaletteLight),
+    colors: transparent,
   });
 }
 
 /**
  * 开关 Monaco 中 txtr.* 的语法着色（标点/数字/英文/引号内/括号内等）。
- * 关闭时仅继承 vs / vs-dark 默认前景，保留 txtr-light 的阅读背景色。
+ * 关闭时仅继承 vs / vs-dark 默认前景；背景仍透明以透出阅读区底色。
  */
 export function setReaderSyntaxHighlightEnabled(
   monacoApi: typeof import("monaco-editor"),
   enabled: boolean,
 ): void {
+  const transparent = { "editor.background": EDITOR_BACKGROUND_TRANSPARENT };
   if (enabled) {
     ensureReaderSyntaxThemes(monacoApi);
     return;
@@ -135,42 +84,14 @@ export function setReaderSyntaxHighlightEnabled(
     base: "vs-dark",
     inherit: true,
     rules: [],
-    colors: {},
+    colors: transparent,
   });
-  monacoApi.editor.defineTheme(READER_TXTR_LIGHT_THEME, {
+  monacoApi.editor.defineTheme("vs", {
     base: "vs",
     inherit: true,
     rules: [],
-    colors: {
-      "editor.background": "#f4ead7",
-    },
+    colors: transparent,
   });
-}
-
-/**
- * 按当前 Monaco 主题更新章节标题行颜色（标点/引号由 Monarch + ensureReaderSyntaxThemes 处理）。
- */
-export function applyReaderInlineDecorationColors(monacoThemeId: string): void {
-  const colors = isLightMonacoTheme(monacoThemeId)
-    ? readerInlineDecorationColorsLight
-    : readerInlineDecorationColorsDark;
-  let el = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
-  if (!el) {
-    el = document.createElement("style");
-    el.id = STYLE_ID;
-    document.head.appendChild(el);
-  }
-  el.textContent = `
-.monaco-editor .${CHAPTER_TITLE_LINE_CLASS} {
-  color: ${colors.chapterTitle} !important;
-  font-size: 2em !important;
-}
-.monaco-editor span:has(>.${CHAPTER_TITLE_LINE_CLASS}) {
-  display: inline-block;
-  transform-origin: left;
-  transform: scale(0.6);
-}
-`;
 }
 
 /**

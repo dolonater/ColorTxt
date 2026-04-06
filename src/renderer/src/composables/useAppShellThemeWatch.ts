@@ -1,12 +1,16 @@
 import { nextTick, watch, type Ref } from "vue";
 import type ReaderMain from "../components/ReaderMain.vue";
-import { APP_DISPLAY_NAME } from "../constants/appUi";
+import {
+  APP_DISPLAY_NAME,
+  applyReaderSurfaceToDocument,
+} from "../constants/appUi";
 
 function syncAppTheme(theme: string) {
   const root = document.documentElement;
   const isDark = theme !== "vs";
   root.classList.toggle("dark", isDark);
   root.style.colorScheme = isDark ? "dark" : "light";
+  applyReaderSurfaceToDocument(theme);
 }
 
 export function useAppShellThemeWatch(deps: {

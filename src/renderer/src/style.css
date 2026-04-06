@@ -55,7 +55,9 @@
   /** SwitchToggle 未勾选时轨道背景 */
   --switch-track-off-bg: #dcdfe6;
 
+  /* 首帧回退；运行时常量见 constants/readerPalette.ts，由 applyReaderSurfaceToDocument 写入 html */
   --reader-bg: #f4ead7;
+  --reader-chapter-title: #b88230;
 }
 
 html.dark {
@@ -115,6 +117,7 @@ html.dark {
   --switch-track-off-bg: #4c4d4f;
 
   --reader-bg: #1e1e1e;
+  --reader-chapter-title: #569cd6;
 }
 
 html,

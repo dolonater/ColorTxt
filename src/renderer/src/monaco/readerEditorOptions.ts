@@ -1,6 +1,5 @@
 import type { editor } from "monaco-editor";
 import { getPresetCssStack } from "../utils/presetFontDefinitions";
-import { READER_TXTR_LIGHT_THEME } from "./readerInlineDecorations";
 
 /** 阅读器 Monaco 初始字号（与 App 持久化同步前） */
 export const READER_EDITOR_DEFAULT_FONT_SIZE = 14;
@@ -21,7 +20,7 @@ export type ReaderEditorCreateOptionsInput = {
   fontSize: number;
   lineHeightMultiple: number;
   fontFamily: string;
-  /** 默认 {@link READER_TXTR_LIGHT_THEME} */
+  /** 默认 `vs`（与 App 亮色主题一致） */
   theme?: string;
   /** Monaco `wrappingStrategy`：advanced 换行更优但更重 */
   wrappingStrategyAdvanced?: boolean;
@@ -38,7 +37,7 @@ export function buildReaderEditorCreateOptions(
     fontSize,
     lineHeightMultiple,
     fontFamily,
-    theme = READER_TXTR_LIGHT_THEME,
+    theme = "vs",
     wrappingStrategyAdvanced = false,
   } = input;
 
