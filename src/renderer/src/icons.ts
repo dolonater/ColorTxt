@@ -32,6 +32,10 @@ import pinActiveIcon from "./assets/pin_active.svg?raw";
 import backIcon from "./assets/back.svg?raw";
 import bookmarkIcon from "./assets/bookmark.svg?raw";
 import bookmarkActiveIcon from "./assets/bookmark_active.svg?raw";
+import highlightMarkIcon from "./assets/highlight.svg?raw";
+import clearIcon from "./assets/clear.svg?raw";
+import addIcon from "./assets/add.svg?raw";
+import closeIcon from "./assets/close.svg?raw";
 
 export const icons = {
   dark: darkIcon,
@@ -68,4 +72,8 @@ export const icons = {
   back: backIcon,
   bookmark: bookmarkIcon,
   bookmarkActive: bookmarkActiveIcon,
+  highlightMark: highlightMarkIcon,
+  clear: clearIcon,
+  add: addIcon,
+  close: closeIcon,
 } as const;

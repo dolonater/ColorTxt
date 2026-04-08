@@ -8,6 +8,9 @@ export type FileBookmarkItem = {
 /** Monaco `saveViewState()` 的 JSON 形态，按路径持久化在 meta 中 */
 export type PersistedEditorViewState = Record<string, unknown>;
 
+/** 自定义高亮词：键为索引字符串 `"0"`,`"1"`…，值为该索引下关键词（仅存索引不存色值） */
+export type HighlightWordsByIndex = Record<string, string[]>;
+
 export type FileMetaRecord = {
   path: string;
   fileName: string;
@@ -20,6 +23,8 @@ export type FileMetaRecord = {
    */
   viewportTopPhysicalLine?: number;
   bookmarks: FileBookmarkItem[];
+  /** 按高亮色索引分组的关键词；索引越界时阅读器忽略该桶 */
+  highlightWordsByIndex?: HighlightWordsByIndex;
   updatedAt: number;
 };
 
@@ -72,6 +77,35 @@ function normalizeEditorViewState(
   return raw as PersistedEditorViewState;
 }
 
+const MAX_HIGHLIGHT_TERM_LEN = 100;
+
+function normalizeHighlightWordsByIndex(
+  raw: unknown,
+): HighlightWordsByIndex | undefined {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
+    return undefined;
+  }
+  const o = raw as Record<string, unknown>;
+  const out: HighlightWordsByIndex = {};
+  for (const [k, v] of Object.entries(o)) {
+    const idx = Number.parseInt(k, 10);
+    if (!Number.isFinite(idx) || idx < 0 || String(idx) !== k) continue;
+    if (!Array.isArray(v)) continue;
+    const words: string[] = [];
+    const seen = new Set<string>();
+    for (const w of v) {
+      if (typeof w !== "string") continue;
+      const t = w.trim();
+      if (!t || t.length > MAX_HIGHLIGHT_TERM_LEN) continue;
+      if (seen.has(t)) continue;
+      seen.add(t);
+      words.push(t);
+    }
+    if (words.length) out[k] = words;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 function normalizeRecord(item: Partial<FileMetaRecord>): FileMetaRecord | null {
   if (typeof item.path !== "string" || !item.path.trim()) return null;
   const path = item.path.trim();
@@ -98,6 +132,9 @@ function normalizeRecord(item: Partial<FileMetaRecord>): FileMetaRecord | null {
     }
   }
   const bookmarks = Array.from(bookmarkMap.values()).sort((a, b) => a.line - b.line);
+  const highlightWordsByIndex = normalizeHighlightWordsByIndex(
+    item.highlightWordsByIndex,
+  );
   const updatedAt =
     typeof item.updatedAt === "number" && Number.isFinite(item.updatedAt)
       ? Math.floor(item.updatedAt)
@@ -109,6 +146,7 @@ function normalizeRecord(item: Partial<FileMetaRecord>): FileMetaRecord | null {
     editorViewState,
     viewportTopPhysicalLine,
     bookmarks,
+    highlightWordsByIndex,
     updatedAt,
   };
 }
@@ -165,6 +203,7 @@ export function upsertFileMetaRecord(
     editorViewState: prev?.editorViewState,
     viewportTopPhysicalLine: prev?.viewportTopPhysicalLine,
     bookmarks: prev?.bookmarks ?? [],
+    highlightWordsByIndex: prev?.highlightWordsByIndex,
     ...nextPartial,
     path,
     fileName: fileNameKey(path),
@@ -212,4 +251,66 @@ export function removeBookmarkForFile(
 
 export function clearBookmarksForFile(items: FileMetaRecord[], path: string) {
   return upsertFileMetaRecord(items, path, () => ({ bookmarks: [] }));
+}
+
+export function appendHighlightTermForFile(
+  items: FileMetaRecord[],
+  path: string,
+  colorIndex: number,
+  text: string,
+) {
+  return assignHighlightTermToColorForFile(items, path, colorIndex, text);
+}
+
+/** 将关键词归到指定高亮色：先从所有索引桶中移除同一词，再写入目标桶（一词仅属一个索引） */
+export function assignHighlightTermToColorForFile(
+  items: FileMetaRecord[],
+  path: string,
+  colorIndex: number,
+  text: string,
+) {
+  let term = text.trim();
+  if (!term || colorIndex < 0 || !Number.isFinite(colorIndex)) return items;
+  if (term.length > MAX_HIGHLIGHT_TERM_LEN) {
+    term = term.slice(0, MAX_HIGHLIGHT_TERM_LEN);
+  }
+  const targetKey = String(Math.floor(colorIndex));
+  return upsertFileMetaRecord(items, path, (prev) => {
+    const base = { ...(prev?.highlightWordsByIndex ?? {}) };
+    for (const k of Object.keys(base)) {
+      const next = base[k]!.filter((w) => w !== term);
+      if (next.length === 0) delete base[k];
+      else base[k] = next;
+    }
+    const list = [...(base[targetKey] ?? [])];
+    if (!list.includes(term)) list.push(term);
+    base[targetKey] = list;
+    return { highlightWordsByIndex: base };
+  });
+}
+
+/** 从所有高亮色桶中移除该关键词（与存储项字符串全等匹配） */
+export function removeHighlightTermFromFile(
+  items: FileMetaRecord[],
+  path: string,
+  text: string,
+) {
+  const term = text.trim();
+  if (!term) return items;
+  return upsertFileMetaRecord(items, path, (prev) => {
+    const base = { ...(prev?.highlightWordsByIndex ?? {}) };
+    let changed = false;
+    for (const k of Object.keys(base)) {
+      const prevList = base[k]!;
+      const next = prevList.filter((w) => w !== term);
+      if (next.length !== prevList.length) changed = true;
+      if (next.length === 0) delete base[k];
+      else base[k] = next;
+    }
+    if (!changed) return {};
+    return {
+      highlightWordsByIndex:
+        Object.keys(base).length > 0 ? base : undefined,
+    };
+  });
 }

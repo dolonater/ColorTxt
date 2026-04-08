@@ -11,6 +11,7 @@ const props = withDefaults(
     /** 内容区面板最大宽度，如 520px、800px */
     maxWidth?: string;
     bodyScroll?: boolean;
+    panelClass?: string;
   }>(),
   {
     title: "",
@@ -18,6 +19,7 @@ const props = withDefaults(
     escClosable: true,
     maxWidth: "520px",
     bodyScroll: true,
+    panelClass: "",
   },
 );
 
@@ -75,6 +77,7 @@ onBeforeUnmount(() => {
       <div
         class="appModalPanel"
         :style="{ maxWidth }"
+        :class="panelClass"
         @click.stop
       >
         <h2 v-if="title" :id="titleId" class="appModalTitle">{{ title }}</h2>

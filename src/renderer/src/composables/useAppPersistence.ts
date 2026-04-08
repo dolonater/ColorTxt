@@ -35,6 +35,13 @@ import {
   type PersistedEditorViewState,
 } from "../stores/fileMetaStore";
 import {
+  DEFAULT_HIGHLIGHT_COLORS_DARK,
+  DEFAULT_HIGHLIGHT_COLORS_LIGHT,
+  highlightColorsPersistPayload,
+  mergeHighlightColors,
+  parseHighlightColorsArray,
+} from "../constants/highlightColors";
+import {
   defaultFullscreenReaderWidthPercent,
   defaultRecentFilesHistoryLimit,
   maxFullscreenReaderWidthPercent,
@@ -76,6 +83,8 @@ export function useAppPersistence(deps: {
   monacoCustomHighlight: Ref<boolean>;
   compressBlankLines: Ref<boolean>;
   compressBlankKeepOneBlank: Ref<boolean>;
+  /** 与「内容上色」同时生效：成对引号/括号是否跨行 */
+  txtrDelimitedMatchCrossLine: Ref<boolean>;
   leadIndentFullWidth: Ref<boolean>;
   showChapterCounts: Ref<boolean>;
   readerFontSize: Ref<number>;
@@ -92,6 +101,8 @@ export function useAppPersistence(deps: {
   defaultShortcutBindings: ShortcutBindingMap;
   readerPaletteOverridesLight: Ref<Partial<ReaderSurfacePalette>>;
   readerPaletteOverridesDark: Ref<Partial<ReaderSurfacePalette>>;
+  highlightColorsLight: Ref<string[]>;
+  highlightColorsDark: Ref<string[]>;
 }) {
   const settingsLoaded = ref(false);
 
@@ -362,6 +373,10 @@ export function useAppPersistence(deps: {
       deps.compressBlankKeepOneBlank.value = data.compressBlankKeepOneBlank;
     }
 
+    if (typeof data.txtrDelimitedMatchCrossLine === "boolean") {
+      deps.txtrDelimitedMatchCrossLine.value = data.txtrDelimitedMatchCrossLine;
+    }
+
     if (typeof data.leadIndentFullWidth === "boolean") {
       deps.leadIndentFullWidth.value = data.leadIndentFullWidth;
     }
@@ -436,6 +451,17 @@ export function useAppPersistence(deps: {
       ? { ...data.readerPaletteOverridesDark }
       : {};
 
+    const parsedHL = parseHighlightColorsArray(data.highlightColorsLight);
+    deps.highlightColorsLight.value = mergeHighlightColors(
+      DEFAULT_HIGHLIGHT_COLORS_LIGHT,
+      parsedHL,
+    );
+    const parsedHD = parseHighlightColorsArray(data.highlightColorsDark);
+    deps.highlightColorsDark.value = mergeHighlightColors(
+      DEFAULT_HIGHLIGHT_COLORS_DARK,
+      parsedHD,
+    );
+
     const normalizedRules = normalizeLoadedChapterRules(data.chapterRules);
     if (normalizedRules) {
       try {
@@ -459,6 +485,7 @@ export function useAppPersistence(deps: {
       monacoCustomHighlight: deps.monacoCustomHighlight.value,
       compressBlankLines: deps.compressBlankLines.value,
       compressBlankKeepOneBlank: deps.compressBlankKeepOneBlank.value,
+      txtrDelimitedMatchCrossLine: deps.txtrDelimitedMatchCrossLine.value,
       leadIndentFullWidth: deps.leadIndentFullWidth.value,
       showChapterCounts: deps.showChapterCounts.value,
       chapterRules: deps.chapterRuleState.value.rules,
@@ -475,6 +502,14 @@ export function useAppPersistence(deps: {
         Object.keys(deps.readerPaletteOverridesDark.value).length > 0
           ? deps.readerPaletteOverridesDark.value
           : undefined,
+      highlightColorsLight: highlightColorsPersistPayload(
+        deps.highlightColorsLight.value,
+        DEFAULT_HIGHLIGHT_COLORS_LIGHT,
+      ),
+      highlightColorsDark: highlightColorsPersistPayload(
+        deps.highlightColorsDark.value,
+        DEFAULT_HIGHLIGHT_COLORS_DARK,
+      ),
     });
   }
 

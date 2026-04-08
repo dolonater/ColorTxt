@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import IconButton from "./IconButton.vue";
 import FontPicker from "./FontPicker.vue";
 import MoreMenu from "./MoreMenu.vue";
@@ -8,7 +9,7 @@ import type { ShortcutBindingMap } from "../services/shortcutRegistry";
 /** 仅路径；阅读进度由 `file.meta` 提供（菜单侧由父组件合并） */
 export type RecentFileItem = { path: string; progress?: number };
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     currentTheme: string;
     showSidebar: boolean;
@@ -35,6 +36,8 @@ withDefaults(
     canPin?: boolean;
     bookmarkActive?: boolean;
     canBookmark?: boolean;
+    highlightTerms?: Array<{ text: string; color: string; colorIndex: number }>;
+    highlightPreviewBg?: string;
     /** 与快捷键面板、按键处理一致，用于「更多」菜单旁展示的快捷键 */
     shortcutBindings: ShortcutBindingMap;
   }>(),
@@ -45,6 +48,8 @@ withDefaults(
     canPin: true,
     bookmarkActive: false,
     canBookmark: true,
+    highlightTerms: () => [],
+    highlightPreviewBg: "var(--reader-bg, var(--bg))",
   },
 );
 
@@ -77,7 +82,43 @@ const emit = defineEmits<{
   pinClick: [];
   goBackFromPin: [];
   bookmarkClick: [];
+  removeHighlightTerm: [text: string];
 }>();
+
+const highlightMenuOpen = ref(false);
+const highlightMenuRootEl = ref<HTMLElement | null>(null);
+const hasHighlightTerms = computed(() => props.highlightTerms.length > 0);
+
+function toggleHighlightMenu() {
+  highlightMenuOpen.value = !highlightMenuOpen.value;
+}
+
+function closeHighlightMenu() {
+  highlightMenuOpen.value = false;
+}
+
+function onRemoveHighlightTermClick(ev: MouseEvent, text: string) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  emit("removeHighlightTerm", text);
+}
+
+const onPointerDown = (ev: PointerEvent) => {
+  if (!highlightMenuOpen.value) return;
+  const root = highlightMenuRootEl.value;
+  if (!root) return;
+  const target = ev.target as Node | null;
+  if (target && root.contains(target)) return;
+  closeHighlightMenu();
+};
+
+onMounted(() => {
+  document.addEventListener("pointerdown", onPointerDown, true);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", onPointerDown, true);
+});
 </script>
 
 <template>
@@ -112,6 +153,57 @@ const emit = defineEmits<{
           :disabled="!bookmarkActive && !canBookmark"
           @click="emit('bookmarkClick')"
         />
+        <div ref="highlightMenuRootEl" class="highlightPicker">
+          <IconButton
+            :icon-html="icons.highlightMark"
+            multicolor
+            :active="hasHighlightTerms"
+            :pressed="highlightMenuOpen"
+            title="高亮词"
+            aria-label="高亮词"
+            @click.stop="toggleHighlightMenu"
+          />
+          <div
+            v-if="highlightMenuOpen"
+            class="highlightMenu"
+            role="menu"
+            @click.stop
+          >
+            <div class="highlightMenuBody">
+              <div v-if="!hasHighlightTerms" class="highlightEmpty">
+                当前文件暂无高亮词
+              </div>
+              <div v-else class="highlightList">
+                <div
+                  v-for="item in highlightTerms"
+                  :key="`${item.colorIndex}-${item.text}`"
+                  class="highlightItem"
+                  :style="{
+                    backgroundColor: highlightPreviewBg,
+                    fontFamily: monacoFontFamily,
+                  }"
+                >
+                  <span
+                    class="highlightText"
+                    :style="{ color: item.color }"
+                    :title="item.text"
+                  >
+                    {{ item.text }}
+                  </span>
+                  <button
+                    type="button"
+                    class="highlightRemoveBtn"
+                    title="移除关键词"
+                    aria-label="移除关键词"
+                    @click="onRemoveHighlightTermClick($event, item.text)"
+                  >
+                    <span class="highlightRemoveIcon" v-html="icons.close"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         <span class="toolbarDivider" aria-hidden="true"></span>
         <FontPicker
           :monaco-font-family="monacoFontFamily"
@@ -257,6 +349,129 @@ const emit = defineEmits<{
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.highlightPicker {
+  position: relative;
+}
+
+.highlightMenu {
+  position: absolute;
+  top: 38px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  min-width: 100px;
+  max-width: 200px;
+  overflow: visible;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.highlightMenuBody {
+  max-height: min(50vh, 420px);
+  overflow: auto;
+}
+
+.highlightMenu::before,
+.highlightMenu::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.highlightMenu::before {
+  top: -8px;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 8px solid var(--border);
+}
+
+.highlightMenu::after {
+  top: -7px;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 7px solid var(--bg);
+}
+
+.highlightList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.highlightItem {
+  border-radius: 6px;
+  min-height: 34px;
+  padding: 6px 4px 6px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.highlightText {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 16px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.highlightRemoveBtn {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--muted);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.highlightItem:hover .highlightRemoveBtn,
+.highlightItem:focus-within .highlightRemoveBtn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.highlightRemoveBtn:hover {
+  color: var(--danger);
+}
+
+.highlightRemoveIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.highlightRemoveIcon :deep(svg) {
+  width: 9px;
+  height: 9px;
+  display: block;
+}
+
+.highlightRemoveIcon :deep(path) {
+  fill: currentColor;
+}
+
+.highlightEmpty {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 8px 10px;
+  text-align: center;
 }
 
 .toolbarDivider {

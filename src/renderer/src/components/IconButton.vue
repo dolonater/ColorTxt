@@ -95,20 +95,4 @@ defineEmits<{ click: [e: MouseEvent] }>();
 .iconBtn.active .icon:not(.icon--multicolor) {
   color: var(--icon-btn-fg);
 }
-
-.iconBtn.large {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-}
-
-.iconBtn.large .icon {
-  width: 18px;
-  height: 18px;
-}
-
-.iconBtn.large .icon :deep(svg) {
-  width: 18px;
-  height: 18px;
-}
 </style>

@@ -26,6 +26,8 @@ export type SettingsApplyPayload = {
   lineHeightMultiple: number;
   /** 压缩空行时是否在每行正文下方保留一行空行（章节标题行除外） */
   compressBlankKeepOneBlank: boolean;
+  /** 与「内容上色」同时生效：成对引号/括号是否跨行 */
+  txtrDelimitedMatchCrossLine: boolean;
 };
 
 const modelValue = defineModel<boolean>({ default: false });
@@ -37,6 +39,8 @@ const props = defineProps<{
   readerFontSize: number;
   readerLineHeightMultiple: number;
   compressBlankKeepOneBlank: boolean;
+  monacoCustomHighlight: boolean;
+  txtrDelimitedMatchCrossLine: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -49,6 +53,7 @@ const draftFullscreenReaderWidthPercent = ref(50);
 const draftFontSize = ref(14);
 const draftLineHeightMultiple = ref(1.5);
 const draftCompressBlankKeepOneBlank = ref(false);
+const draftTxtrDelimitedMatchCrossLine = ref(false);
 
 const draftMaxLineHeightMultiple = computed(() =>
   maxLineHeightMultipleForFontSize(draftFontSize.value),
@@ -65,6 +70,7 @@ watch(modelValue, (open) => {
     props.readerLineHeightMultiple,
   );
   draftCompressBlankKeepOneBlank.value = props.compressBlankKeepOneBlank;
+  draftTxtrDelimitedMatchCrossLine.value = props.txtrDelimitedMatchCrossLine;
 });
 
 watch(draftFontSize, (fs) => {
@@ -86,6 +92,7 @@ function onConfirm() {
     fontSize: draftFontSize.value,
     lineHeightMultiple: draftLineHeightMultiple.value,
     compressBlankKeepOneBlank: draftCompressBlankKeepOneBlank.value,
+    txtrDelimitedMatchCrossLine: draftTxtrDelimitedMatchCrossLine.value,
   });
 }
 
@@ -186,6 +193,20 @@ async function onClearCache() {
         </div>
         <p class="settingsHint">
           仅在开启「压缩空行」时生效，在每行下方保留一个空行。
+        </p>
+      </div>
+
+      <div class="settingsRow">
+        <div class="settingsRowMain">
+          <span class="settingsLabel">引号/括号匹配支持跨行</span>
+          <SwitchToggle
+            v-model="draftTxtrDelimitedMatchCrossLine"
+            :disabled="!monacoCustomHighlight"
+            aria-label="引号/括号匹配支持跨行"
+          />
+        </div>
+        <p class="settingsHint">
+          仅在开启「内容上色」时生效，开启后引号和括号会跨行匹配；如果出现大段非引号/括号内的文本被误上色，是因为原文没有正确关闭引号/括号，可禁用该选项以降低影响范围。
         </p>
       </div>
 

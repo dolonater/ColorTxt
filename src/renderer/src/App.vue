@@ -22,7 +22,12 @@ import { useAppShellThemeWatch } from "./composables/useAppShellThemeWatch";
 import { useAppWindowBindings } from "./composables/useAppWindowBindings";
 import { useTxtStreamPipeline } from "./composables/useTxtStreamPipeline";
 import { fileHistoryKey } from "./stores/recentHistoryStore";
-import type { FileMetaRecord } from "./stores/fileMetaStore";
+import {
+  assignHighlightTermToColorForFile,
+  findFileMetaRecord,
+  removeHighlightTermFromFile,
+  type FileMetaRecord,
+} from "./stores/fileMetaStore";
 import {
   applyReaderSurfaceToDocument,
   defaultCompressBlankKeepOneBlank,
@@ -41,6 +46,7 @@ import {
   mergeReaderSurfacePalette,
   overridesFromFullPalette,
   defaultRestoreSessionOnStartup,
+  defaultTxtrDelimitedMatchCrossLine,
   defaultShowChapterCounts,
   defaultShowSidebar,
   emptyFileHintText,
@@ -55,6 +61,12 @@ import {
   minLineHeightMultiple,
   type ReaderSurfacePalette,
 } from "./constants/appUi";
+import {
+  DEFAULT_HIGHLIGHT_COLORS_DARK,
+  DEFAULT_HIGHLIGHT_COLORS_LIGHT,
+  MIN_HIGHLIGHT_COLORS,
+  mergeHighlightColors,
+} from "./constants/highlightColors";
 import { formatCharCount, formatFileSize } from "./utils/format";
 import { READER_EDITOR_DEFAULT_FONT_FAMILY } from "./monaco/readerEditorOptions";
 import {
@@ -184,6 +196,8 @@ const monacoCustomHighlight = ref(defaultMonacoCustomHighlight);
 const compressBlankLines = ref(defaultCompressBlankLines);
 /** 压缩空行时是否在每行正文下方保留一行空行（章节标题行除外） */
 const compressBlankKeepOneBlank = ref(defaultCompressBlankKeepOneBlank);
+/** 与「内容上色」同时生效：Monarch 成对引号/括号是否跨行 */
+const txtrDelimitedMatchCrossLine = ref(defaultTxtrDelimitedMatchCrossLine);
 /** 为 true 时正文行统一行首两个全角空格（章节标题行与空行除外） */
 const leadIndentFullWidth = ref(defaultLeadIndentFullWidth);
 const readerFontSize = ref(defaultReaderFontSize);
@@ -208,6 +222,11 @@ const fullscreenReaderWidthPercent = ref(defaultFullscreenReaderWidthPercent);
 const readerPaletteOverridesLight = ref<Partial<ReaderSurfacePalette>>({});
 const readerPaletteOverridesDark = ref<Partial<ReaderSurfacePalette>>({});
 
+const highlightColorsLight = ref<string[]>([
+  ...DEFAULT_HIGHLIGHT_COLORS_LIGHT,
+]);
+const highlightColorsDark = ref<string[]>([...DEFAULT_HIGHLIGHT_COLORS_DARK]);
+
 const readerSurfaceLight = computed(() =>
   mergeReaderSurfacePalette(
     defaultReaderPaletteLight,
@@ -220,6 +239,41 @@ const readerSurfaceDark = computed(() =>
     readerPaletteOverridesDark.value,
   ),
 );
+
+const highlightColorsForReader = computed(() =>
+  currentTheme.value === "vs"
+    ? highlightColorsLight.value
+    : highlightColorsDark.value,
+);
+
+const currentFileHighlightWords = computed(() => {
+  const p = currentFile.value;
+  if (!p) return undefined;
+  return findFileMetaRecord(fileMetaRecords.value, p)?.highlightWordsByIndex;
+});
+
+const currentFileHighlightTerms = computed<
+  Array<{ text: string; color: string; colorIndex: number }>
+>(() => {
+  const groups = currentFileHighlightWords.value;
+  if (!groups) return [];
+  const colors = highlightColorsForReader.value;
+  const bodyText =
+    currentTheme.value === "vs"
+      ? readerSurfaceLight.value.bodyText
+      : readerSurfaceDark.value.bodyText;
+  const out: Array<{ text: string; color: string; colorIndex: number }> = [];
+  for (const [idxKey, terms] of Object.entries(groups)) {
+    const idx = Number.parseInt(idxKey, 10);
+    if (!Number.isFinite(idx) || idx < 0) continue;
+    const color = idx < colors.length ? colors[idx] : bodyText;
+    for (const text of terms) {
+      if (!text) continue;
+      out.push({ text, color, colorIndex: idx });
+    }
+  }
+  return out;
+});
 
 const readerPaneWrapRef = useTemplateRef<HTMLElement>("readerPaneWrapRef");
 const {
@@ -286,6 +340,7 @@ const persistence = useAppPersistence({
   monacoCustomHighlight,
   compressBlankLines,
   compressBlankKeepOneBlank,
+  txtrDelimitedMatchCrossLine,
   leadIndentFullWidth,
   showChapterCounts,
   readerFontSize,
@@ -302,12 +357,15 @@ const persistence = useAppPersistence({
   defaultShortcutBindings,
   readerPaletteOverridesLight,
   readerPaletteOverridesDark,
+  highlightColorsLight,
+  highlightColorsDark,
 });
 const {
   persistSettings,
   clearRecentFiles,
   persistWindowUnloadState,
   persistFileListCache,
+  persistFileMeta,
   touchRecentFile,
   upsertBookmark,
   removeBookmark,
@@ -577,9 +635,49 @@ function onApplyReaderPalettes(payload: {
   refreshReaderSurfaceAfterPaletteChange();
 }
 
+function onApplyHighlightColors(payload: { light: string[]; dark: string[] }) {
+  highlightColorsLight.value = mergeHighlightColors(
+    DEFAULT_HIGHLIGHT_COLORS_LIGHT,
+    payload.light.length >= MIN_HIGHLIGHT_COLORS ? payload.light : undefined,
+  );
+  highlightColorsDark.value = mergeHighlightColors(
+    DEFAULT_HIGHLIGHT_COLORS_DARK,
+    payload.dark.length >= MIN_HIGHLIGHT_COLORS ? payload.dark : undefined,
+  );
+  persistSettings();
+}
+
+function onAddHighlightTerm(payload: { text: string; colorIndex: number }) {
+  const path = currentFile.value;
+  if (!path) return;
+  fileMetaRecords.value = assignHighlightTermToColorForFile(
+    fileMetaRecords.value,
+    path,
+    payload.colorIndex,
+    payload.text,
+  );
+  persistFileMeta();
+}
+
+function onRemoveHighlightTerm(payload: { text: string }) {
+  const path = currentFile.value;
+  if (!path) return;
+  fileMetaRecords.value = removeHighlightTermFromFile(
+    fileMetaRecords.value,
+    path,
+    payload.text,
+  );
+  persistFileMeta();
+}
+
+function onRemoveHighlightTermFromHeader(text: string) {
+  onRemoveHighlightTerm({ text });
+}
+
 function applySettings(payload: SettingsApplyPayload) {
   const prevCompressBlankKeepOneBlank = compressBlankKeepOneBlank.value;
   compressBlankKeepOneBlank.value = payload.compressBlankKeepOneBlank;
+  txtrDelimitedMatchCrossLine.value = payload.txtrDelimitedMatchCrossLine;
   restoreSessionOnStartup.value = payload.restoreSessionOnStartup;
   recentFilesHistoryLimit.value = Math.max(
     0,
@@ -748,6 +846,12 @@ useAppShellThemeWatch({
         :can-pin="canPin"
         :bookmark-active="bookmarkActive"
         :can-bookmark="canBookmark"
+        :highlight-terms="currentFileHighlightTerms"
+        :highlight-preview-bg="
+          currentTheme === 'vs'
+            ? readerSurfaceLight.readerBg
+            : readerSurfaceDark.readerBg
+        "
         :current-theme="currentTheme"
         :show-sidebar="showSidebar"
         :can-increase-font="readerFontSize < maxFontSize"
@@ -768,6 +872,7 @@ useAppShellThemeWatch({
         @open-file="openFileViaDialog"
         @pin-click="onPinClick"
         @bookmark-click="onBookmarkClick"
+        @remove-highlight-term="onRemoveHighlightTermFromHeader"
         @go-back-from-pin="onGoBackFromPin"
         @change-theme="currentTheme = $event"
         @toggle-sidebar="showSidebar = !showSidebar"
@@ -865,15 +970,21 @@ useAppShellThemeWatch({
           ref="readerRef"
           class="readerPane"
           :monaco-custom-highlight="monacoCustomHighlight"
+          :txtr-delimited-match-cross-line="txtrDelimitedMatchCrossLine"
           :compress-blank-lines="compressBlankLines"
           :monaco-advanced-wrapping="monacoAdvancedWrapping"
           :stream-loading="loading"
           :reader-surface-light="readerSurfaceLight"
           :reader-surface-dark="readerSurfaceDark"
+          :highlight-colors="highlightColorsForReader"
+          :highlight-words-by-index="currentFileHighlightWords"
+          :reader-file-path="currentFile"
           @probe-line-change="onProbeLineChange"
           @viewport-top-line-change="onViewportTopLineChange"
           @viewport-end-line-change="onViewportEndLineChange"
           @viewport-visual-progress-change="onViewportVisualProgressChange"
+          @add-highlight-term="onAddHighlightTerm"
+          @remove-highlight-term="onRemoveHighlightTerm"
         />
         <div
           v-if="showReaderIdleHint"
@@ -937,6 +1048,8 @@ useAppShellThemeWatch({
       :reader-font-size="readerFontSize"
       :reader-line-height-multiple="readerLineHeightMultiple"
       :compress-blank-keep-one-blank="compressBlankKeepOneBlank"
+      :monaco-custom-highlight="monacoCustomHighlight"
+      :txtr-delimited-match-cross-line="txtrDelimitedMatchCrossLine"
       :chapter-rules="chapterRuleState.rules"
       :chapter-rule-error-text="chapterRuleErrorText"
       :editing-bookmark-line="editingBookmarkLine"
@@ -949,12 +1062,15 @@ useAppShellThemeWatch({
       :reader-surface-light="readerSurfaceLight"
       :reader-surface-dark="readerSurfaceDark"
       :monaco-font-family="monacoFontFamily"
+      :highlight-colors-light="highlightColorsLight"
+      :highlight-colors-dark="highlightColorsDark"
       @apply-settings="applySettings"
       @apply-shortcut-bindings="applyShortcutBindings"
       @apply-chapter-rules="applyChapterMatchRules"
       @confirm-add-bookmark="confirmAddBookmark"
       @confirm-remove-active-bookmark="confirmRemoveActiveBookmark"
       @apply-reader-palettes="onApplyReaderPalettes"
+      @apply-highlight-colors="onApplyHighlightColors"
     />
   </div>
 </template>

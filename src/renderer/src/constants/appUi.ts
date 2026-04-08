@@ -11,7 +11,7 @@ export {
   parseReaderPaletteOverrides,
   READER_SURFACE_KEYS,
   READER_SURFACE_LABELS,
-  READER_SURFACE_ROW_PAIRS,
+  READER_SURFACE_TABLE_ROWS,
 } from "./readerPalette";
 
 export {
@@ -52,6 +52,11 @@ export const skipUnloadPersistenceSessionKey = "colorTxt.skipUnloadPersistence";
 export const defaultReaderTheme = "vs";
 export const defaultShowSidebar = true;
 export const defaultMonacoCustomHighlight = true;
+/**
+ * 为 true 且开启「内容上色」时，Monarch 成对引号/括号可跨行（includeLF: false）。
+ * 为 false 时：换行即退出未闭合的引号/括号状态。
+ */
+export const defaultTxtrDelimitedMatchCrossLine = true;
 /** 为 true 时在加载文件流中丢弃空行（仅空格/缩进也视为空行） */
 export const defaultCompressBlankLines = false;
 /** 压缩空行时是否在每行正文下方保留一行空行（章节标题行除外） */

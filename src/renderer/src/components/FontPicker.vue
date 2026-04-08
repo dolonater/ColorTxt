@@ -304,7 +304,8 @@ onBeforeUnmount(() => {
 .fontMenu {
   position: absolute;
   top: 38px;
-  right: 0;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 200;
   min-width: 220px;
   max-width: 300px;
@@ -313,6 +314,31 @@ onBeforeUnmount(() => {
   border-radius: 6px;
   padding: 6px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.fontMenu::before,
+.fontMenu::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.fontMenu::before {
+  top: -8px;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 8px solid var(--border);
+}
+
+.fontMenu::after {
+  top: -7px;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 7px solid var(--bg);
 }
 
 .fontMenuDivider {

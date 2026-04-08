@@ -311,6 +311,31 @@ onBeforeUnmount(() => {
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
 }
 
+.moreMenu::before,
+.moreMenu::after {
+  content: "";
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.moreMenu::before {
+  top: -8px;
+  right: 6px;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 8px solid var(--border);
+}
+
+.moreMenu::after {
+  top: -7px;
+  right: 7px;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 7px solid var(--bg);
+}
+
 .moreMenuItem {
   width: 100%;
   display: flex;

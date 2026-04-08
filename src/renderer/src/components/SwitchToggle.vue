@@ -7,21 +7,26 @@ withDefaults(
     ariaLabel?: string;
     /** `md` 默认；`sm` 用于侧栏等紧凑区域 */
     size?: "md" | "sm";
+    disabled?: boolean;
   }>(),
-  { ariaLabel: "", size: "md" },
+  { ariaLabel: "", size: "md", disabled: false },
 );
 </script>
 
 <template>
   <label
     class="switchToggle"
-    :class="{ 'switchToggle--sm': size === 'sm' }"
+    :class="{
+      'switchToggle--sm': size === 'sm',
+      'switchToggle--disabled': disabled,
+    }"
   >
     <input
       v-model="modelValue"
       class="switchToggleInput"
       type="checkbox"
       role="switch"
+      :disabled="disabled"
       :aria-checked="modelValue"
       :aria-label="ariaLabel || undefined"
     />
@@ -35,6 +40,11 @@ withDefaults(
   display: inline-flex;
   flex-shrink: 0;
   cursor: pointer;
+}
+
+.switchToggle--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .switchToggleInput {

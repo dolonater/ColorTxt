@@ -2,6 +2,9 @@ export type TxtFileItem = { name: string; path: string; size: number };
 
 import type { ChapterMatchRule } from "../chapter";
 import {
+  parseHighlightColorsArray,
+} from "../constants/highlightColors";
+import {
   parseReaderPaletteOverrides,
   type ReaderSurfacePalette,
 } from "../constants/readerPalette";
@@ -18,6 +21,8 @@ export type PersistedSettingsData = {
   lineHeightMultiple?: number;
   fontFamily?: string;
   monacoCustomHighlight?: boolean;
+  /** 与「内容上色」同时开启时：成对引号/括号是否允许跨行 */
+  txtrDelimitedMatchCrossLine?: boolean;
   /** 是否在加载时过滤空行（仅空格/缩进也视为空行） */
   compressBlankLines?: boolean;
   /** 压缩空行时是否在每行正文下方保留一行空行（章节标题行除外） */
@@ -41,6 +46,10 @@ export type PersistedSettingsData = {
   readerPaletteOverridesLight?: Partial<ReaderSurfacePalette>;
   /** 阅读器表面色用户覆盖（暗色侧） */
   readerPaletteOverridesDark?: Partial<ReaderSurfacePalette>;
+  /** 自定义高亮色（亮色主题），与默认逐项相同可不写入 */
+  highlightColorsLight?: string[];
+  /** 自定义高亮色（暗色主题） */
+  highlightColorsDark?: string[];
 };
 
 export type SessionSnapshot = {
@@ -101,6 +110,9 @@ export function loadPersistedSettingsData(
   if (typeof obj.monacoCustomHighlight === "boolean") {
     data.monacoCustomHighlight = obj.monacoCustomHighlight;
   }
+  if (typeof obj.txtrDelimitedMatchCrossLine === "boolean") {
+    data.txtrDelimitedMatchCrossLine = obj.txtrDelimitedMatchCrossLine;
+  }
   if (typeof obj.compressBlankLines === "boolean") {
     data.compressBlankLines = obj.compressBlankLines;
   }
@@ -158,6 +170,14 @@ export function loadPersistedSettingsData(
   ) {
     const p = parseReaderPaletteOverrides(obj.readerPaletteOverridesDark);
     if (Object.keys(p).length) data.readerPaletteOverridesDark = p;
+  }
+  if (Array.isArray(obj.highlightColorsLight)) {
+    const h = parseHighlightColorsArray(obj.highlightColorsLight);
+    if (h) data.highlightColorsLight = h;
+  }
+  if (Array.isArray(obj.highlightColorsDark)) {
+    const h = parseHighlightColorsArray(obj.highlightColorsDark);
+    if (h) data.highlightColorsDark = h;
   }
   return data;
 }

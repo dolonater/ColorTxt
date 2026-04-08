@@ -1,10 +1,12 @@
 /**
- * 阅读器表面色（背景、章节标题、Monaco txtr.* token）。
+ * 阅读器表面色（背景、章节标题、正文、Monaco txtr.* token）。
  * 默认值与历史 readerInlineDecorations / style.css 一致；用户自定义通过 Partial 合并。
  */
 export type ReaderSurfacePalette = {
   readerBg: string;
   chapterTitle: string;
+  /** 无 txtr token 时的正文（Monaco `editor.foreground`） */
+  bodyText: string;
   txtrQuoteInner: string;
   txtrBracketInner: string;
   txtrPunctuation: string;
@@ -16,6 +18,7 @@ export type ReaderSurfacePalette = {
 export const READER_SURFACE_KEYS = [
   "readerBg",
   "chapterTitle",
+  "bodyText",
   "txtrQuoteInner",
   "txtrBracketInner",
   "txtrPunctuation",
@@ -24,12 +27,14 @@ export const READER_SURFACE_KEYS = [
   "txtrEnglish",
 ] as const satisfies readonly (keyof ReaderSurfacePalette)[];
 
-/** 配色表每行两个字段，顺序与 `READER_SURFACE_KEYS` 一致 */
-export const READER_SURFACE_ROW_PAIRS: readonly [
-  keyof ReaderSurfacePalette,
-  keyof ReaderSurfacePalette,
-][] = [
-  ["readerBg", "chapterTitle"],
+/** 配色表一行：双列；「背景色」单独一行 */
+export type ReaderSurfaceTableRow =
+  | readonly [keyof ReaderSurfacePalette, keyof ReaderSurfacePalette]
+  | readonly [keyof ReaderSurfacePalette];
+
+export const READER_SURFACE_TABLE_ROWS: readonly ReaderSurfaceTableRow[] = [
+  ["readerBg"],
+  ["chapterTitle", "bodyText"],
   ["txtrQuoteInner", "txtrBracketInner"],
   ["txtrPunctuation", "txtrSpecialMarker"],
   ["txtrNumber", "txtrEnglish"],
@@ -39,6 +44,7 @@ export const READER_SURFACE_LABELS: Record<keyof ReaderSurfacePalette, string> =
   {
     readerBg: "背景色",
     chapterTitle: "章节标题",
+    bodyText: "正文",
     txtrQuoteInner: "引号内文字",
     txtrBracketInner: "括号内文字",
     txtrPunctuation: "标点",
@@ -50,6 +56,7 @@ export const READER_SURFACE_LABELS: Record<keyof ReaderSurfacePalette, string> =
 export const defaultReaderPaletteLight: ReaderSurfacePalette = {
   readerBg: "#f4ead7",
   chapterTitle: "#b88230",
+  bodyText: "#000000",
   txtrQuoteInner: "#a31515",
   txtrBracketInner: "#001080",
   txtrPunctuation: "#267f99",
@@ -61,6 +68,7 @@ export const defaultReaderPaletteLight: ReaderSurfacePalette = {
 export const defaultReaderPaletteDark: ReaderSurfacePalette = {
   readerBg: "#1e1e1e",
   chapterTitle: "#569cd6",
+  bodyText: "#d4d4d4",
   txtrQuoteInner: "#ce9178",
   txtrBracketInner: "#9cdcfe",
   txtrPunctuation: "#4ec9b0",

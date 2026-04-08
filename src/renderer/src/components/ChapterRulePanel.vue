@@ -198,7 +198,6 @@ function moveDown(index: number) {
             <td class="cellActions">
               <div class="cellActionsInner">
                 <IconButton
-                  large
                   :icon-html="icons.up"
                   aria-label="上移"
                   title="上移"
@@ -206,7 +205,6 @@ function moveDown(index: number) {
                   @click="moveUp(index)"
                 />
                 <IconButton
-                  large
                   :icon-html="icons.down"
                   aria-label="下移"
                   title="下移"
@@ -214,7 +212,6 @@ function moveDown(index: number) {
                   @click="moveDown(index)"
                 />
                 <IconButton
-                  large
                   :icon-html="icons.edit"
                   aria-label="编辑"
                   title="编辑"
@@ -222,7 +219,6 @@ function moveDown(index: number) {
                 />
                 <IconButton
                   v-if="!item.rule.builtIn"
-                  large
                   :icon-html="icons.remove"
                   aria-label="移除"
                   title="移除"
@@ -288,7 +284,9 @@ function moveDown(index: number) {
 
 .ruleTable {
   width: 100%;
-  border-collapse: collapse;
+  /* separate + 0 间距：粘性表头用 border-bottom 才稳定；collapse 下底边易错位，且 table-cell 上 box-shadow 常不绘制 */
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: fixed;
 }
 
@@ -319,9 +317,9 @@ function moveDown(index: number) {
 }
 
 .colActions {
-  /* 4×32 + 3×gap + 左右 padding 24 */
-  width: 172px;
-  min-width: 172px;
+  /* width 30×4 + gap 4×3 + padding 12×2 */
+  width: 156px;
+  min-width: 164px;
   box-sizing: border-box;
 }
 

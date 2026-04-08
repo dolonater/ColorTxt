@@ -22,6 +22,8 @@ defineProps<{
   readerFontSize: number;
   readerLineHeightMultiple: number;
   compressBlankKeepOneBlank: boolean;
+  monacoCustomHighlight: boolean;
+  txtrDelimitedMatchCrossLine: boolean;
   chapterRules: ChapterMatchRule[];
   chapterRuleErrorText: string;
   editingBookmarkLine: number | null;
@@ -34,6 +36,8 @@ defineProps<{
   readerSurfaceLight: ReaderSurfacePalette;
   readerSurfaceDark: ReaderSurfacePalette;
   monacoFontFamily: string;
+  highlightColorsLight: string[];
+  highlightColorsDark: string[];
 }>();
 
 const emit = defineEmits<{
@@ -45,6 +49,7 @@ const emit = defineEmits<{
   applyReaderPalettes: [
     payload: { light: ReaderSurfacePalette; dark: ReaderSurfacePalette },
   ];
+  applyHighlightColors: [payload: { light: string[]; dark: string[] }];
 }>();
 
 const showAboutPanel = defineModel<boolean>("showAboutPanel", {
@@ -111,6 +116,8 @@ function onBookmarkNoteKeydown(e: KeyboardEvent) {
     :reader-font-size="readerFontSize"
     :reader-line-height-multiple="readerLineHeightMultiple"
     :compress-blank-keep-one-blank="compressBlankKeepOneBlank"
+    :monaco-custom-highlight="monacoCustomHighlight"
+    :txtr-delimited-match-cross-line="txtrDelimitedMatchCrossLine"
     @apply="emit('applySettings', $event)"
   />
   <ChapterRulePanel
@@ -126,7 +133,10 @@ function onBookmarkNoteKeydown(e: KeyboardEvent) {
     :reader-surface-light="readerSurfaceLight"
     :reader-surface-dark="readerSurfaceDark"
     :monaco-font-family="monacoFontFamily"
+    :highlight-colors-light="highlightColorsLight"
+    :highlight-colors-dark="highlightColorsDark"
     @apply-reader-palettes="emit('applyReaderPalettes', $event)"
+    @apply-highlight-colors="emit('applyHighlightColors', $event)"
   />
 
   <AppModal

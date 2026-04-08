@@ -11,8 +11,22 @@ function hexForThemeRule(hexWithHash: string): string {
   return hexWithHash.replace(/^#/, "");
 }
 
-/** 与 txtrTextMonarch 一致：quoteInner / bracketInner 为兜底 token；语义优先级由词法规则顺序保证 */
-function buildTxtrTokenRules(palette: ReaderSurfacePalette) {
+function readerThemeEditorColors(palette: ReaderSurfacePalette) {
+  return {
+    "editor.background": EDITOR_BACKGROUND_TRANSPARENT,
+    "editor.foreground": palette.bodyText,
+  };
+}
+
+/** 与 txtrTextMonarch 一致：quoteInner / bracketInner 为兜底；引号内先自定义高亮再括号开符，故关键词优先于 quoteInner */
+function buildTxtrTokenRules(
+  palette: ReaderSurfacePalette,
+  highlightColors: readonly string[],
+) {
+  const hlRules = highlightColors.map((c, i) => ({
+    token: `txtr.customHighlight.${i}`,
+    foreground: hexForThemeRule(c),
+  }));
   return [
     {
       token: "txtr.quoteInner",
@@ -38,6 +52,7 @@ function buildTxtrTokenRules(palette: ReaderSurfacePalette) {
       token: "txtr.english",
       foreground: hexForThemeRule(palette.txtrEnglish),
     },
+    ...hlRules,
   ];
 }
 
@@ -49,19 +64,19 @@ export function ensureReaderSyntaxThemes(
   monacoApi: typeof import("monaco-editor"),
   lightPalette: ReaderSurfacePalette,
   darkPalette: ReaderSurfacePalette,
+  highlightColors: readonly string[],
 ): void {
-  const transparent = { "editor.background": EDITOR_BACKGROUND_TRANSPARENT };
   monacoApi.editor.defineTheme("vs-dark", {
     base: "vs-dark",
     inherit: true,
-    rules: buildTxtrTokenRules(darkPalette),
-    colors: transparent,
+    rules: buildTxtrTokenRules(darkPalette, highlightColors),
+    colors: readerThemeEditorColors(darkPalette),
   });
   monacoApi.editor.defineTheme("vs", {
     base: "vs",
     inherit: true,
-    rules: buildTxtrTokenRules(lightPalette),
-    colors: transparent,
+    rules: buildTxtrTokenRules(lightPalette, highlightColors),
+    colors: readerThemeEditorColors(lightPalette),
   });
 }
 
@@ -74,23 +89,28 @@ export function setReaderSyntaxHighlightEnabled(
   enabled: boolean,
   lightPalette: ReaderSurfacePalette,
   darkPalette: ReaderSurfacePalette,
+  highlightColors: readonly string[],
 ): void {
-  const transparent = { "editor.background": EDITOR_BACKGROUND_TRANSPARENT };
   if (enabled) {
-    ensureReaderSyntaxThemes(monacoApi, lightPalette, darkPalette);
+    ensureReaderSyntaxThemes(
+      monacoApi,
+      lightPalette,
+      darkPalette,
+      highlightColors,
+    );
     return;
   }
   monacoApi.editor.defineTheme("vs-dark", {
     base: "vs-dark",
     inherit: true,
     rules: [],
-    colors: transparent,
+    colors: readerThemeEditorColors(darkPalette),
   });
   monacoApi.editor.defineTheme("vs", {
     base: "vs",
     inherit: true,
     rules: [],
-    colors: transparent,
+    colors: readerThemeEditorColors(lightPalette),
   });
 }
 

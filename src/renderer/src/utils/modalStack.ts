@@ -1,6 +1,9 @@
 const BASE_Z_INDEX = 6000
 const Z_INDEX_STEP = 10
 
+/** 与 `registerModal` 首层蒙层一致，供阅读器浮层等压在蒙层之下 */
+export const MODAL_STACK_BASE_Z_INDEX = BASE_Z_INDEX
+
 type StackEntry = {
   instanceId: number
   close: () => void
@@ -10,6 +13,18 @@ type StackEntry = {
 const stack: StackEntry[] = []
 let nextInstanceId = 0
 let escListenerAttached = false
+
+const modalStackListeners = new Set<() => void>()
+
+function emitModalStackChange() {
+  for (const fn of modalStackListeners) fn()
+}
+
+/** 模态入栈/出栈时回调（用于关闭与蒙层叠放无关的浮层） */
+export function subscribeModalStackChange(listener: () => void): () => void {
+  modalStackListeners.add(listener)
+  return () => modalStackListeners.delete(listener)
+}
 
 /** 供全屏 ESC 等逻辑判断：有模态时由本模块 document 监听单独 resolve，避免与外层重复关闭多层 */
 export function hasModalOnStack(): boolean {
@@ -71,6 +86,7 @@ export function registerModal(opts: {
     getEscClosable: opts.getEscClosable,
   })
   ensureEscListener()
+  emitModalStackChange()
 
   return {
     zIndex,
@@ -78,6 +94,7 @@ export function registerModal(opts: {
       const idx = stack.findIndex((e) => e.instanceId === instanceId)
       if (idx >= 0) stack.splice(idx, 1)
       removeEscListenerIfIdle()
+      emitModalStackChange()
     },
   }
 }
