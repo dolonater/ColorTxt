@@ -183,7 +183,7 @@ src/
         │   ├── color.ts          # 十六进制与 RGB/HSV 互转、`normalizeLooseHex6` 等；供 `HexColorPickerField` 取色
         │   ├── format.ts         # 字数、文件大小等展示用格式化
         │   ├── fontFamilyCss.ts          # 字体族名转 CSS `font-family` 片段（引号与栈拼接，供字体选择等复用）
-        │   ├── presetFontDefinitions.ts # 预设字体：各平台族名栈、菜单标签、与持久化字体的预设匹配（见 README「预设字体与平台映射」）
+        │   ├── presetFontDefinitions.ts # 预设字体：各平台族名栈、菜单标签、与持久化字体的预设匹配（见「预设字体与平台映射」）
         │   └── modalStack.ts           # 弹窗层叠与 ESC 关闭顺序
         └── workers/              # Web Worker（预留目录；用于耗时任务 offload 等）
 ```
