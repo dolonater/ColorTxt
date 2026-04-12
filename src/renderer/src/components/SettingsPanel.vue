@@ -172,7 +172,9 @@ async function onClearCache() {
             />
           </div>
         </div>
-        <p class="settingsHint">打开其他格式（如 epub）的电子书时，会自动转换为 txt 格式并缓存到该目录下；如果放空，将缓存到源文件同目录下。</p>
+        <p class="settingsHint">
+          打开其他格式的电子书时，会自动转换为 txt 格式并缓存到该目录下；<br />如果放空，将缓存到源文件同目录下。
+        </p>
       </div>
 
       <div class="settingsRow">
@@ -228,7 +230,7 @@ async function onClearCache() {
           />
         </div>
         <p class="settingsHint">
-          仅在开启「内容上色」时生效，开启后引号和括号会跨行匹配；如果出现大段非引号/括号内的文本被误上色，是因为原文没有正确关闭引号/括号，可禁用该选项以降低影响范围。
+          仅在开启「内容上色」时生效，开启后引号和括号会跨行匹配；<br />如果出现大段非引号/括号内的文本被误上色，是因为原文没有正确关闭引号/括号，可禁用该选项以降低影响范围。
         </p>
       </div>
 

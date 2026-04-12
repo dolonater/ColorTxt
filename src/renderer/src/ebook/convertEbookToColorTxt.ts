@@ -119,7 +119,7 @@ export async function convertBookBufferToArtifacts(
     return convertFb2ToArtifacts(buffer, true, outputBase);
   }
   if (lower.endsWith(".pdf")) {
-    return convertPdfToArtifacts(buffer);
+    return convertPdfToArtifacts(buffer, outputBase);
   }
 
   throw new Error("不支持的电子书格式。");
