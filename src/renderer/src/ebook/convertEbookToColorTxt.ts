@@ -105,7 +105,7 @@ export async function convertBookBufferToArtifacts(
   if (lower.endsWith(".azw3")) {
     const zipEpub = await tryConvertZipAsEpub(buffer, outputBase);
     if (zipEpub) return zipEpub;
-    throw new Error("该 AZW3 不是 KF8 ZIP 封装，暂无法转换。");
+    return convertMobiToArtifacts(buffer, outputBase);
   }
 
   if (lower.endsWith(".mobi")) {
