@@ -132,7 +132,7 @@ src/
 │   ├── index.html            # 渲染进程 HTML 壳
 │   └── src/
 │       ├── main.ts           # Vue 应用挂载
-        ├── App.vue           # 根组件：布局与全局状态串联；书钉/书签、全屏阅读区布局、阅读进度等拆至 composables；向 ReaderMain 传入阅读偏好与当前主题的 **`highlightColorsLight` / `highlightColorsDark`**（合并默认后）、**`monacoCustomHighlight`**、当前文件的 **`highlightWordsByIndex`**；维护 `shortcutBindings` 并传给 `AppHeader`；**`openColorScheme`** 打开配色弹窗；挂载 `AppOverlays` 等
+│       ├── App.vue           # 根组件：布局与全局状态串联；书钉/书签、全屏阅读区布局、阅读进度等拆至 composables；向 ReaderMain 传入阅读偏好与当前主题的 **`highlightColorsLight` / `highlightColorsDark`**（合并默认后）、**`monacoCustomHighlight`**、当前文件的 **`highlightWordsByIndex`**；维护 `shortcutBindings` 并传给 `AppHeader`；**`openColorScheme`** 打开配色弹窗；挂载 `AppOverlays` 等
 │       ├── appShell.css      # 根组件专用样式（由 `App.vue` 以 scoped 方式引入）：全屏顶/底/侧栏布局、正文区等
 │       ├── injectionKeys.ts  # `provide` / `inject` 用的 `InjectionKey`（如书签备注输入框 `ref`，供 `useAppBookmarkPins` 与 `AppOverlays` 对齐）
 │       ├── style.css         # 全局样式与主题变量
@@ -145,66 +145,66 @@ src/
 │       │   ├── useAppBookmarkPins.ts      # 书钉与书签：列表项、视口内活动书签、添加/移除/跳转及书签弹窗交互
 │       │   ├── useAppChapterListSync.ts   # 侧栏章节/文件列表「滚到当前」的一拍状态（与 VirtualList 配合）
 │       │   ├── useAppChapterNavigation.ts # 章节跳转、章节规则与最近文件、侧栏标签等联动；应用章节规则后重载当前文件时以视口末行恢复阅读位置（与 `useAppReaderUiPrefs` 切换排版一致）
-        │   ├── useAppFileSession.ts       # 打开文件/选目录、会话快照恢复、与流管道和持久化衔接；`resetSession` 置 `readingProgressSynced` 为 false
-        │   ├── useAppFullscreenReaderLayout.ts # 全屏时正文区域宽度样式；layout 上点击左右空白聚焦编辑器；两侧空白区 `wheel` 转交 `ReaderMain.delegateEditorWheelFromBrowserEvent`，见下文「全屏正文宽度与两侧空白滚轮」）；事件来自侧栏子树时不劫持（含 Shadow DOM 向上判定）
-        │   ├── useAppPersistence.ts       # 界面设置、会话快照、最近打开列表、文件元数据（书签等）的加载与保存；`persistFileMeta` 受 `readingProgressSynced` 门控；`persistWindowUnloadState` 在「清除缓存」后的刷新流程中可被 `skipUnloadPersistenceSessionKey` 跳过（见「清除缓存（设置面板）」）
-        │   ├── useAppReaderChrome.ts      # 全屏阅读时顶栏/底栏/侧栏悬停显隐与侧栏宽度拖拽
-        │   ├── useAppReaderUiPrefs.ts     # 字号/行高/字体、高级换行与内容着色等阅读偏好与 Monaco、持久化同步；切换压缩空行/行首缩进时重载当前文件并以视口末行映射物理行恢复（与流结束 `scrollLineToBottom` 一致）；字号增大时按字号上限夹行高倍数
-        │   ├── useAppReadingProgress.ts   # 阅读进度展示模型：以视觉滚动进度为主（到底=100%），并输出 `(当前行/总行)` 文案；供底栏/侧栏/最近打开统一使用
-        │   ├── useAppShellThemeWatch.ts   # 主题切换：根节点 class、编辑器主题、原生主题 IPC
-        │   ├── useAppWindowBindings.ts    # 窗口挂载/卸载、可配置快捷键（`shortcutBindings`）、拖放与主进程 IPC 等绑定；`document` 上 `mousemove` 驱动全屏边缘唤起（具体逻辑在 `useAppReaderChrome`）；订阅 `file:stream-*`，在流结束并完成滚动/恢复阅读位置后置 `readingProgressSynced`；`pagehide` / `beforeunload` 时落盘会话与设置（与「清除缓存」防回写配合）
-        │   ├── useReaderSidebarLists.ts   # 侧栏文件/章节/书签虚拟列表、过滤与滚动同步
-        │   └── useTxtStreamPipeline.ts    # 大文件流式解析：物理行/显示行映射、章节累加、空行压缩与章节留白标准化；正文在缓冲区累积，流结束再一次性 setFullText/setChapters（见 `ipcHandlers` 小节「渲染进程与 Monaco 写入」）
-        ├── constants/
-        │   ├── appUi.ts          # UI 常量：存储 key、侧栏宽度、字号/行高上下限与步进、`default*` 出厂默认等（无本地设置或与 `persistKey` 字段缺失时；见下文
-        「阅读器字号与行高」「界面与阅读偏好默认值」）；re-export `readerPalette` 的 `applyReaderSurfaceToDocument` 等
-        │   ├── readerPalette.ts  # 阅读器表面色（背景、章节标题、Monaco txtr token）默认值与合并逻辑；用户覆盖存 `colorTxt.ui.settings` 的 `readerPaletteOverridesLight` / `readerPaletteOverridesDark`；`useAppShellThemeWatch` 写入 `html` 的 `--reader-bg`、`--reader-chapter-title`
-        │   └── highlightColors.ts # 自定义高亮色：默认亮/暗两套 `#RRGGBB` 数组、`MIN_HIGHLIGHT_COLORS`（至少 3 色）、`parseHighlightColorsArray` / `mergeHighlightColors` 等与设置持久化配合
-        ├── monaco/           # Monaco 阅读器扩展（与 ReaderMain 配合）
-        │   ├── chapterStickyScroll.ts    # 注册折叠区与文档符号以驱动黏性章节大纲；禁用黏性条点击跳转
-        │   ├── readerEditorOptions.ts    # 阅读器 `create` / `updateOptions` 的选项构建（换行、只读、查找、stickyScroll 等）
-        │   ├── readerInlineDecorations.ts # 章节标题行内装饰；合并 `readerPalette` 与 **`highlightColors`** 生成 Monarch token 规则；自定义高亮词开启时并入 `txtrHighlightMonarch` 生成的规则
-        │   ├── readerKeyScroll.ts        # 方向键/Page 键滚动
-        │   ├── txtrHighlightMonarch.ts   # 由 `highlightWordsByIndex` 生成 `txtr.customHighlight.{index}` 类 Monarch 规则（更长词优先、同长则更小颜色索引优先；大小写不敏感）
-        │   └── txtrTextMonarch.ts        # 自定义 Monarch：`txtr-text` 语言；标点/对话/数字等着色；可选注入上述自定义高亮规则
-        ├── reader/
-        │   ├── chapterIndex.ts   # 当前视口行号对应的章节下标（二分查找）
-        │   └── lineMapping.ts    # 物理行号与「滤空后显示行」的映射工具
-        ├── ebook/                # 电子书 → ColorTxt：解析为 UTF-8 正文与可选插图资源（与 `shared/ebookExtensions.ts` 扩展名一致）
-        │   ├── convertEbookToColorTxt.ts   # 按扩展名调度各解析器；`{basename}.txt` 输出路径、userData/源目录缓存查找与写出
-        │   ├── ebookFormat.ts    # 是否电子书路径、与 TXT 合并的「支持书籍路径」、输出基名与文件名净化等
-        │   ├── ebookTypes.ts     # 转换产物类型（如 `ColorTxtArtifacts`：正文 + 可选 `imageWrites`）
-        │   ├── pathUtils.ts      # 路径拼接与规范化（POSIX 风格片段，供转换与资源相对路径）
-        │   ├── yieldToUi.ts      # 长解析中分段 `await`，避免主线程长时间阻塞
-        │   ├── ebookInternalLinkMarkers.ts # 正文内链标记 `<<ID:…>>` / `<<A:…|…>>` 及转义（阅读器内跳转）
-        │   ├── parseEpub.ts      # EPUB（ZIP）解析与转换；可尝试将 ZIP 当 EPUB 处理
-        │   ├── parseMobi.ts      # MOBI / AZW3：经 `mobi/foliateMobi` 抽取再转 artifacts
-        │   ├── parsePdf.ts       # PDF：pdfjs-dist 文本层抽取
-        │   ├── parseFb2.ts       # FB2 / FBZ（ZIP 包 FB2）解析与转换
-        │   ├── parseChm.ts       # CHM：目录与 HTML 遍历、插图写出；依赖 `chm/` 解压与读取
-        │   ├── chm/
-        │   │   ├── chmArchive.ts # CHM 文件表、块定位与原始块读取
-        │   │   └── lzxDecode.ts  # LZX 流解压（CHM 存储块）
-        │   └── mobi/
-        │       ├── foliateMobi.js    # Foliate MOBI 引擎（打包进渲染层）
-        │       └── foliateMobi.d.ts  # 上述脚本的 TypeScript 声明
-        ├── services/
-        │   ├── fileListService.ts      # 目录选择、txt 列表合并与规范化
-        │   ├── fileOpenService.ts      # 打开文件前的校验与恢复行号解析
-        │   ├── physicalLineStream.ts   # 按换行切分流式块，处理跨 chunk 的不完整行
-        │   ├── shortcutRegistry.ts     # 快捷键动作 ID、默认 Electron 快捷键、窗口/全局作用域
-        │   ├── shortcutUtils.ts        # 快捷键规范化、物理键位解析（`code` 优先）、展示文案、冲突检测
-        │   └── shortcutService.ts      # 窗口级快捷键监听：按持久化绑定匹配并派发动作
-        ├── stores/
-        │   ├── cacheStore.ts           # localStorage：界面设置、会话快照的读写
-        │   ├── fileMetaStore.ts        # 单文件元数据：书签、末行/进度等；与 `colorTxt.file.meta` 同步
-        │   └── recentHistoryStore.ts   # 最近打开文件列表的持久化与更新
-        ├── utils/
-        │   ├── color.ts          # 十六进制与 RGB/HSV 互转、`normalizeLooseHex6` 等；供 `HexColorPickerField` 取色
-        │   ├── format.ts         # 字数、文件大小等展示用格式化
-        │   ├── fontFamilyCss.ts          # 字体族名转 CSS `font-family` 片段（引号与栈拼接，供字体选择等复用）
-        │   ├── presetFontDefinitions.ts # 预设字体：各平台族名栈、菜单标签、与持久化字体的预设匹配（见「预设字体与平台映射」）
-        │   └── modalStack.ts           # 弹窗层叠与 ESC 关闭顺序
+│       │   ├── useAppFileSession.ts       # 打开文件/选目录、会话快照恢复、与流管道和持久化衔接；`resetSession` 置 `readingProgressSynced` 为 false
+│       │   ├── useAppFullscreenReaderLayout.ts # 全屏时正文区域宽度样式；layout 上点击左右空白聚焦编辑器；两侧空白区 `wheel` 转交 `ReaderMain.delegateEditorWheelFromBrowserEvent`，见下文「全屏正文宽度与两侧空白滚轮」）；事件来自侧栏子树时不劫持（含 Shadow DOM 向上判定）
+│       │   ├── useAppPersistence.ts       # 界面设置、会话快照、最近打开列表、文件元数据（书签等）的加载与保存；`persistFileMeta` 受 `readingProgressSynced` 门控；`persistWindowUnloadState` 在「清除缓存」后的刷新流程中可被 `skipUnloadPersistenceSessionKey` 跳过（见「清除缓存（设置面板）」）
+│       │   ├── useAppReaderChrome.ts      # 全屏阅读时顶栏/底栏/侧栏悬停显隐与侧栏宽度拖拽
+│       │   ├── useAppReaderUiPrefs.ts     # 字号/行高/字体、高级换行与内容着色等阅读偏好与 Monaco、持久化同步；切换压缩空行/行首缩进时重载当前文件并以视口末行映射物理行恢复（与流结束 `scrollLineToBottom` 一致）；字号增大时按字号上限夹行高倍数
+│       │   ├── useAppReadingProgress.ts   # 阅读进度展示模型：以视觉滚动进度为主（到底=100%），并输出 `(当前行/总行)` 文案；供底栏/侧栏/最近打开统一使用
+│       │   ├── useAppShellThemeWatch.ts   # 主题切换：根节点 class、编辑器主题、原生主题 IPC
+│       │   ├── useAppWindowBindings.ts    # 窗口挂载/卸载、可配置快捷键（`shortcutBindings`）、拖放与主进程 IPC 等绑定；`document` 上 `mousemove` 驱动全屏边缘唤起（具体逻辑在 `useAppReaderChrome`）；订阅 `file:stream-*`，在流结束并完成滚动/恢复阅读位置后置 `readingProgressSynced`；`pagehide` / `beforeunload` 时落盘会话与设置（与「清除缓存」防回写配合）
+│       │   ├── useReaderSidebarLists.ts   # 侧栏文件/章节/书签虚拟列表、过滤与滚动同步
+│       │   └── useTxtStreamPipeline.ts    # 大文件流式解析：物理行/显示行映射、章节累加、空行压缩与章节留白标准化；正文在缓冲区累积，流结束再一次性 setFullText/setChapters（见 `ipcHandlers` 小节「渲染进程与 Monaco 写入」）
+│       ├── constants/
+│       │   ├── appUi.ts          # UI 常量：存储 key、侧栏宽度、字号/行高上下限与步进、`default*` 出厂默认等（无本地设置或与 `persistKey` 字段缺失时；见下文
+│       「阅读器字号与行高」「界面与阅读偏好默认值」）；re-export `readerPalette` 的 `applyReaderSurfaceToDocument` 等
+│       │   ├── readerPalette.ts  # 阅读器表面色（背景、章节标题、Monaco txtr token）默认值与合并逻辑；用户覆盖存 `colorTxt.ui.settings` 的 `readerPaletteOverridesLight` / `readerPaletteOverridesDark`；`useAppShellThemeWatch` 写入 `html` 的 `--reader-bg`、`--reader-chapter-title`
+│       │   └── highlightColors.ts # 自定义高亮色：默认亮/暗两套 `#RRGGBB` 数组、`MIN_HIGHLIGHT_COLORS`（至少 3 色）、`parseHighlightColorsArray` / `mergeHighlightColors` 等与设置持久化配合
+│       ├── monaco/           # Monaco 阅读器扩展（与 ReaderMain 配合）
+│       │   ├── chapterStickyScroll.ts    # 注册折叠区与文档符号以驱动黏性章节大纲；禁用黏性条点击跳转
+│       │   ├── readerEditorOptions.ts    # 阅读器 `create` / `updateOptions` 的选项构建（换行、只读、查找、stickyScroll 等）
+│       │   ├── readerInlineDecorations.ts # 章节标题行内装饰；合并 `readerPalette` 与 **`highlightColors`** 生成 Monarch token 规则；自定义高亮词开启时并入 `txtrHighlightMonarch` 生成的规则
+│       │   ├── readerKeyScroll.ts        # 方向键/Page 键滚动
+│       │   ├── txtrHighlightMonarch.ts   # 由 `highlightWordsByIndex` 生成 `txtr.customHighlight.{index}` 类 Monarch 规则（更长词优先、同长则更小颜色索引优先；大小写不敏感）
+│       │   └── txtrTextMonarch.ts        # 自定义 Monarch：`txtr-text` 语言；标点/对话/数字等着色；可选注入上述自定义高亮规则
+│       ├── reader/
+│       │   ├── chapterIndex.ts   # 当前视口行号对应的章节下标（二分查找）
+│       │   └── lineMapping.ts    # 物理行号与「滤空后显示行」的映射工具
+│       ├── ebook/                # 电子书 → ColorTxt：解析为 UTF-8 正文与可选插图资源（与 `shared/ebookExtensions.ts` 扩展名一致）
+│       │   ├── convertEbookToColorTxt.ts   # 按扩展名调度各解析器；`{basename}.txt` 输出路径、userData/源目录缓存查找与写出
+│       │   ├── ebookFormat.ts    # 是否电子书路径、与 TXT 合并的「支持书籍路径」、输出基名与文件名净化等
+│       │   ├── ebookTypes.ts     # 转换产物类型（如 `ColorTxtArtifacts`：正文 + 可选 `imageWrites`）
+│       │   ├── pathUtils.ts      # 路径拼接与规范化（POSIX 风格片段，供转换与资源相对路径）
+│       │   ├── yieldToUi.ts      # 长解析中分段 `await`，避免主线程长时间阻塞
+│       │   ├── ebookInternalLinkMarkers.ts # 正文内链标记 `<<ID:…>>` / `<<A:…|…>>` 及转义（阅读器内跳转）
+│       │   ├── parseEpub.ts      # EPUB（ZIP）解析与转换；可尝试将 ZIP 当 EPUB 处理
+│       │   ├── parseMobi.ts      # MOBI / AZW3：经 `mobi/foliateMobi` 抽取再转 artifacts
+│       │   ├── parsePdf.ts       # PDF：pdfjs-dist 文本层抽取
+│       │   ├── parseFb2.ts       # FB2 / FBZ（ZIP 包 FB2）解析与转换
+│       │   ├── parseChm.ts       # CHM：目录与 HTML 遍历、插图写出；依赖 `chm/` 解压与读取
+│       │   ├── chm/
+│       │   │   ├── chmArchive.ts # CHM 文件表、块定位与原始块读取
+│       │   │   └── lzxDecode.ts  # LZX 流解压（CHM 存储块）
+│       │   └── mobi/
+│       │       ├── foliateMobi.js    # Foliate MOBI 引擎（打包进渲染层）
+│       │       └── foliateMobi.d.ts  # 上述脚本的 TypeScript 声明
+│       ├── services/
+│       │   ├── fileListService.ts      # 目录选择、txt 列表合并与规范化
+│       │   ├── fileOpenService.ts      # 打开文件前的校验与恢复行号解析
+│       │   ├── physicalLineStream.ts   # 按换行切分流式块，处理跨 chunk 的不完整行
+│       │   ├── shortcutRegistry.ts     # 快捷键动作 ID、默认 Electron 快捷键、窗口/全局作用域
+│       │   ├── shortcutUtils.ts        # 快捷键规范化、物理键位解析（`code` 优先）、展示文案、冲突检测
+│       │   └── shortcutService.ts      # 窗口级快捷键监听：按持久化绑定匹配并派发动作
+│       ├── stores/
+│       │   ├── cacheStore.ts           # localStorage：界面设置、会话快照的读写
+│       │   ├── fileMetaStore.ts        # 单文件元数据：书签、末行/进度等；与 `colorTxt.file.meta` 同步
+│       │   └── recentHistoryStore.ts   # 最近打开文件列表的持久化与更新
+│       ├── utils/
+│       │   ├── color.ts          # 十六进制与 RGB/HSV 互转、`normalizeLooseHex6` 等；供 `HexColorPickerField` 取色
+│       │   ├── format.ts         # 字数、文件大小等展示用格式化
+│       │   ├── fontFamilyCss.ts          # 字体族名转 CSS `font-family` 片段（引号与栈拼接，供字体选择等复用）
+│       │   ├── presetFontDefinitions.ts # 预设字体：各平台族名栈、菜单标签、与持久化字体的预设匹配（见「预设字体与平台映射」）
+│       │   └── modalStack.ts           # 弹窗层叠与 ESC 关闭顺序
 │       └── workers/              # Web Worker（预留目录；用于耗时任务 offload 等）
 └── shared/
     ├── packageDerived.ts         # 从 package 信息派生的共享元数据（主/渲染共用）
