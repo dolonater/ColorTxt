@@ -35,7 +35,7 @@ npm run build
 打包产物默认输出到 `release` 目录，目标平台配置如下：
 
 - macOS：`dmg`
-- Windows：`nsis`
+- Windows：`nsis`、`portable`
 - Linux：`AppImage`
 
 ### 发布
@@ -102,8 +102,9 @@ git push
 
 | 目录 / 文件               | 说明                                                               |
 | ------------------------- | ------------------------------------------------------------------ |
-| `src/`                    | 应用源码（主进程、预加载、渲染进程）                               |
-| `resources/`              | 打包资源（应用图标等）                                             |
+| `src/`                    | 应用源码（主进程、预加载、渲染进程、共享常量）                     |
+| `scripts/`                | 开发期间的测试类脚本（辅助性质，不参与应用打包）                   |
+| `resources/`              | 打包资源（应用图标、macOS entitlements 等）                        |
 | `dist/`                   | `electron-vite build` 编译输出，供 `electron-builder` 打入安装包   |
 | `release/`                | `electron-builder` 最终产物输出目录                                |
 | `images/`                 | 文档用截图等（不参与应用打包逻辑）                                 |
@@ -119,6 +120,7 @@ src/
 │   ├── index.ts              # Electron 主进程入口：组装窗口工厂 / IPC / 单实例与启动参数
 │   ├── ipcHandlers.ts        # 主进程 IPC：对话框、目录扫描、流式读文件、字体列表、主题同步等
 │   ├── launchTxtHandlers.ts  # 单实例锁、命令行 / 系统关联打开 txt、向窗口广播打开路径
+│   ├── colortxtLocalProtocol.ts # colortxt:// 本地资源协议：阅读器内图片等资源安全访问
 │   ├── windowFactory.ts      # BrowserWindow 创建：加载页面、全屏/DevTools、窗口边界持久化钩子
 │   ├── windowBounds.ts       # 窗口位置与大小：读取/校验/保存到 userData
 │   ├── globalShortcuts.ts    # 主进程系统级全局快捷键集中注册（退出时统一注销）
@@ -126,23 +128,23 @@ src/
 │   └── updaterMessages.ts    # 更新错误码 / 网络错误的中文文案映射
 ├── preload/
 │   └── index.ts              # 预加载：向渲染进程暴露受控 API
-└── renderer/
-    ├── index.html            # 渲染进程 HTML 壳
-    └── src/
-        ├── main.ts           # Vue 应用挂载
+├── renderer/
+│   ├── index.html            # 渲染进程 HTML 壳
+│   └── src/
+│       ├── main.ts           # Vue 应用挂载
         ├── App.vue           # 根组件：布局与全局状态串联；书钉/书签、全屏阅读区布局、阅读进度等拆至 composables；向 ReaderMain 传入阅读偏好与当前主题的 **`highlightColorsLight` / `highlightColorsDark`**（合并默认后）、**`monacoCustomHighlight`**、当前文件的 **`highlightWordsByIndex`**；维护 `shortcutBindings` 并传给 `AppHeader`；**`openColorScheme`** 打开配色弹窗；挂载 `AppOverlays` 等
-        ├── appShell.css      # 根组件专用样式（由 `App.vue` 以 scoped 方式引入）：全屏顶/底/侧栏布局、正文区等
-        ├── injectionKeys.ts  # `provide` / `inject` 用的 `InjectionKey`（如书签备注输入框 `ref`，供 `useAppBookmarkPins` 与 `AppOverlays` 对齐）
-        ├── style.css         # 全局样式与主题变量
-        ├── env.d.ts          # 类型声明（如静态资源、window.colorTxt）
-        ├── chapter.ts        # 章节标题检测、章节匹配规则（正则）的存取与校验
-        ├── icons.ts          # 各功能图标的 SVG 字符串汇总，供组件内联使用
-        ├── assets/           # 内置字体、界面 SVG 图标等静态资源
-        ├── components/       # Vue 界面组件（见下表）
-        ├── composables/      # 根组件用组合式函数拆分职责（以下为各文件概要）
-        │   ├── useAppBookmarkPins.ts      # 书钉与书签：列表项、视口内活动书签、添加/移除/跳转及书签弹窗交互
-        │   ├── useAppChapterListSync.ts   # 侧栏章节/文件列表「滚到当前」的一拍状态（与 VirtualList 配合）
-        │   ├── useAppChapterNavigation.ts # 章节跳转、章节规则与最近文件、侧栏标签等联动；应用章节规则后重载当前文件时以视口末行恢复阅读位置（与 `useAppReaderUiPrefs` 切换排版一致）
+│       ├── appShell.css      # 根组件专用样式（由 `App.vue` 以 scoped 方式引入）：全屏顶/底/侧栏布局、正文区等
+│       ├── injectionKeys.ts  # `provide` / `inject` 用的 `InjectionKey`（如书签备注输入框 `ref`，供 `useAppBookmarkPins` 与 `AppOverlays` 对齐）
+│       ├── style.css         # 全局样式与主题变量
+│       ├── env.d.ts          # 类型声明（如静态资源、window.colorTxt）
+│       ├── chapter.ts        # 章节标题检测、章节匹配规则（正则）的存取与校验
+│       ├── icons.ts          # 各功能图标的 SVG 字符串汇总，供组件内联使用
+│       ├── assets/           # 内置字体、界面 SVG 图标等静态资源
+│       ├── components/       # Vue 界面组件（见下表）
+│       ├── composables/      # 根组件用组合式函数拆分职责（以下为各文件概要）
+│       │   ├── useAppBookmarkPins.ts      # 书钉与书签：列表项、视口内活动书签、添加/移除/跳转及书签弹窗交互
+│       │   ├── useAppChapterListSync.ts   # 侧栏章节/文件列表「滚到当前」的一拍状态（与 VirtualList 配合）
+│       │   ├── useAppChapterNavigation.ts # 章节跳转、章节规则与最近文件、侧栏标签等联动；应用章节规则后重载当前文件时以视口末行恢复阅读位置（与 `useAppReaderUiPrefs` 切换排版一致）
         │   ├── useAppFileSession.ts       # 打开文件/选目录、会话快照恢复、与流管道和持久化衔接；`resetSession` 置 `readingProgressSynced` 为 false
         │   ├── useAppFullscreenReaderLayout.ts # 全屏时正文区域宽度样式；layout 上点击左右空白聚焦编辑器；两侧空白区 `wheel` 转交 `ReaderMain.delegateEditorWheelFromBrowserEvent`，见下文「全屏正文宽度与两侧空白滚轮」）；事件来自侧栏子树时不劫持（含 Shadow DOM 向上判定）
         │   ├── useAppPersistence.ts       # 界面设置、会话快照、最近打开列表、文件元数据（书签等）的加载与保存；`persistFileMeta` 受 `readingProgressSynced` 门控；`persistWindowUnloadState` 在「清除缓存」后的刷新流程中可被 `skipUnloadPersistenceSessionKey` 跳过（见「清除缓存（设置面板）」）
@@ -168,6 +170,24 @@ src/
         ├── reader/
         │   ├── chapterIndex.ts   # 当前视口行号对应的章节下标（二分查找）
         │   └── lineMapping.ts    # 物理行号与「滤空后显示行」的映射工具
+        ├── ebook/                # 电子书 → ColorTxt：解析为 UTF-8 正文与可选插图资源（与 `shared/ebookExtensions.ts` 扩展名一致）
+        │   ├── convertEbookToColorTxt.ts   # 按扩展名调度各解析器；`{basename}.txt` 输出路径、userData/源目录缓存查找与写出
+        │   ├── ebookFormat.ts    # 是否电子书路径、与 TXT 合并的「支持书籍路径」、输出基名与文件名净化等
+        │   ├── ebookTypes.ts     # 转换产物类型（如 `ColorTxtArtifacts`：正文 + 可选 `imageWrites`）
+        │   ├── pathUtils.ts      # 路径拼接与规范化（POSIX 风格片段，供转换与资源相对路径）
+        │   ├── yieldToUi.ts      # 长解析中分段 `await`，避免主线程长时间阻塞
+        │   ├── ebookInternalLinkMarkers.ts # 正文内链标记 `<<ID:…>>` / `<<A:…|…>>` 及转义（阅读器内跳转）
+        │   ├── parseEpub.ts      # EPUB（ZIP）解析与转换；可尝试将 ZIP 当 EPUB 处理
+        │   ├── parseMobi.ts      # MOBI / AZW3：经 `mobi/foliateMobi` 抽取再转 artifacts
+        │   ├── parsePdf.ts       # PDF：pdfjs-dist 文本层抽取
+        │   ├── parseFb2.ts       # FB2 / FBZ（ZIP 包 FB2）解析与转换
+        │   ├── parseChm.ts       # CHM：目录与 HTML 遍历、插图写出；依赖 `chm/` 解压与读取
+        │   ├── chm/
+        │   │   ├── chmArchive.ts # CHM 文件表、块定位与原始块读取
+        │   │   └── lzxDecode.ts  # LZX 流解压（CHM 存储块）
+        │   └── mobi/
+        │       ├── foliateMobi.js    # Foliate MOBI 引擎（打包进渲染层）
+        │       └── foliateMobi.d.ts  # 上述脚本的 TypeScript 声明
         ├── services/
         │   ├── fileListService.ts      # 目录选择、txt 列表合并与规范化
         │   ├── fileOpenService.ts      # 打开文件前的校验与恢复行号解析
@@ -185,7 +205,10 @@ src/
         │   ├── fontFamilyCss.ts          # 字体族名转 CSS `font-family` 片段（引号与栈拼接，供字体选择等复用）
         │   ├── presetFontDefinitions.ts # 预设字体：各平台族名栈、菜单标签、与持久化字体的预设匹配（见「预设字体与平台映射」）
         │   └── modalStack.ts           # 弹窗层叠与 ESC 关闭顺序
-        └── workers/              # Web Worker（预留目录；用于耗时任务 offload 等）
+│       └── workers/              # Web Worker（预留目录；用于耗时任务 offload 等）
+└── shared/
+    ├── packageDerived.ts         # 从 package 信息派生的共享元数据（主/渲染共用）
+    └── ebookExtensions.ts        # 电子书扩展名常量与壳层打开路径判定
 ```
 
 #### `src/main/`（主进程）
@@ -263,35 +286,88 @@ src/
 
 #### `src/renderer/src/components/`（主要 Vue 组件）
 
-| 文件                                                 | 主要功能                                                                                                                                                                                                                                                                                                                                                                                   |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `AppHeader.vue`                                      | 顶栏：打开文件、书钉/书签、字体与字号行高、压缩空行/行首缩进、**高级换行策略**（Monaco `wrappingStrategy: advanced`）、内容上色、**高亮笔**（下拉列出当前文件自定义词及移除；背景/正文色来自阅读器变量供预览）、章节规则、主题、侧栏与全屏、查找与更多菜单等；从 `App.vue` 接收当前 **`shortcutBindings`** 并传给 `MoreMenu`；**`@open-color-scheme`** 可从高亮菜单进入配色弹窗                                                                                                                                                                                                                                                                                                                                                                 |
-| `AppOverlays.vue`                                    | 蒙层弹窗：关于、快捷键、设置、配色、章节规则、书签与更新流等                                                                                                                                                                                                                                                                                                                                                                                  |
-| `AppContextMenu.vue`                                 | 通用右键菜单                                                                                                                                                                                                                                                                                                                                                                               |
-| `AppFooter.vue`                                      | 底栏：当前路径、加载进度、阅读进度、字数、文件大小、编码                                                                                                                                                                                                                                                                                                                                   |
+| 文件                                                 | 主要功能                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AppHeader.vue`                                      | 顶栏：打开文件、书钉/书签、字体与字号行高、压缩空行/行首缩进、**高级换行策略**（Monaco `wrappingStrategy: advanced`）、内容上色、**高亮笔**（下拉列出当前文件自定义词及移除；背景/正文色来自阅读器变量供预览）、章节规则、主题、侧栏与全屏、查找与更多菜单等；从 `App.vue` 接收当前 **`shortcutBindings`** 并传给 `MoreMenu`；**`@open-color-scheme`** 可从高亮菜单进入配色弹窗                                                                                       |
+| `AppOverlays.vue`                                    | 蒙层弹窗：关于、快捷键、设置、配色、章节规则、书签与更新流等                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `AppContextMenu.vue`                                 | 通用右键菜单                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `AppFooter.vue`                                      | 底栏：当前路径、加载进度、阅读进度、字数、文件大小、编码                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `ReaderMain.vue`                                     | 阅读区：挂载编辑器与业务逻辑；编辑器静态选项集中在 `monaco/readerEditorOptions.ts`；章节行内装饰与 **`highlightColors` / `highlightWordsByIndex`** 驱动的 Monarch 与装饰同步；选区添加自定义高亮词、色块选择器（按当前主题高亮色列表）；`monacoCustomHighlight` 开关；查找、滚动与 probe；全屏两侧空白滚轮经父组件调用 **`delegateEditorWheelFromBrowserEvent`**；流式打开文件时在 `flushCarry` 末尾 **`setFullText`** 一次性灌入正文（保留 `appendText` 供其它场景） |
-| `ReaderSidebar.vue`                                  | 侧栏容器：文件 / 章节 / 书签标签；挂载 `FileListPanel`、`ChapterListPanel`、`BookmarkListPanel`；与 `useReaderSidebarLists` 等配合                                                                                                                                                                                                                                                         |
-| `FileListPanel.vue`                                  | 侧栏「文件」：txt 文件列表、过滤                                                                                                                                                                                                                                                                                                                                                           |
-| `ChapterListPanel.vue`                               | 侧栏「章节」：章节列表、字数开关、跳转当前章                                                                                                                                                                                                                                                                                                                                               |
-| `BookmarkListPanel.vue`                              | 侧栏「书签」：书签列表、跳转、编辑与清除                                                                                                                                                                                                                                                                                                                                                   |
-| `FontPicker.vue`                                     | 预设字体（跨平台映射，逻辑见 `presetFontDefinitions.ts`）与系统字体列表                                                                                                                                                                                                                                                                                                                    |
-| `ChapterRulePanel.vue` / `ChapterRuleEditDialog.vue` | 章节匹配规则列表与编辑                                                                                                                                                                                                                                                                                                                                                                     |
-| `ColorSchemeTabBar.vue`                              | 配色弹窗内页签：**阅读器** / **高亮色**                                                                                                                                                                                                                                                                                                                                                    |
-| `ColorSchemeReaderPanel.vue`                         | 「阅读器」页：表面色字段网格 + 实时预览（与 `ColorSchemePanel` 草稿联动）                                                                                                                                                                                                                                                                                                                  |
-| `ColorSchemeHighlightPanel.vue`                      | 「高亮色」页：按槽位编辑 `#RRGGBB`（`HexColorPickerField`）、增删行（不少于 `MIN_HIGHLIGHT_COLORS`）、表格内预览条                                                                                                                                                                                                                                                                         |
-| `ColorSchemePanel.vue`                               | 配色弹窗容器：`ColorSchemeTabBar` + 上述两面板；确定时分别 `applyReaderPalettes` 与 **`applyHighlightColors`**（亮/暗各一套数组）写回 `App.vue` 并经 `useAppPersistence` 落盘；打开时从 props 同步草稿                                                                                                                                                                                                                                                                                                                                                                     |
-| `HexColorPickerField.vue`                            | 单行十六进制颜色 + HSV 取色浮层（智能上下翻转、视口贴边）；`draftHex` / `draftEnd` 事件供父组件在弹层打开期间做临时预览                                                                                                                                                                                                                                                                                                                                                                     |
-| `MoreMenu.vue`                                       | 更多菜单：最近文件、查找、快捷键、设置、**配色**（动作 `openColorScheme`，默认 **F6**）、检查更新、关于、退出等；菜单项右侧快捷键文案来自 **`shortcutBindings`**，经 `shortcutUtils.acceleratorToDisplayText` 与快捷键面板及 `shortcutService` 实际生效绑定同步                                                                                                                                                                                                                                                                                                                             |
-| `SettingsPanel.vue`                                  | 设置弹窗：启动恢复会话、历史条数、字号/行高、压缩空行保留一行、全屏正文区宽度等（**高级换行策略**仅在顶栏切换，见 `AppHeader.vue`）；确定后与 `App.vue` 持久化并同步阅读器；**footer 左侧「清除缓存」**（主进程确认框）清空除 `colorTxt.ui.settings` 外的其它 `localStorage` 数据并刷新窗口（见下文「清除缓存」）                                                                                                                   |
-| `NumericInput.vue`                                   | 通用数字输入：可选 `min` / `max`、整数模式                                                                                                                                                                                                                                                                                                                                                 |
-| `RangeSlider.vue`                                    | 通用范围滑块（最小/最大值与步进）                                                                                                                                                                                                                                                                                                                                                          |
-| `SwitchToggle.vue`                                   | 通用开关控件                                                                                                                                                                                                                                                                                                                                                                               |
-| `ShortcutPanel.vue`                                  | 快捷键列表与编辑：表格展示、点击录制、Enter 确认、冲突提示、全局热键校验；录制区为不可编辑聚焦区 + 闪烁光标，避免 IME 上屏                                                                                                                                                                                                                                                                 |
-| `AboutPanel.vue`                                     | 关于面板                                                                                                                                                                                                                                                                                                                                                                                   |
-| `AppModal.vue`                                       | 通用模态框（与 `modalStack` 配合）                                                                                                                                                                                                                                                                                                                                                         |
-| `AppUpdateFlow.vue`                                  | 自更新：检查/下载/安装进度、相关弹窗与 `electron-updater` 事件订阅                                                                                                                                                                                                                                                                                                                         |
-| `IconButton.vue`                                     | 图标按钮                                                                                                                                                                                                                                                                                                                                                                                   |
-| `VirtualList.vue`                                    | 虚拟列表（长列表性能）                                                                                                                                                                                                                                                                                                                                                                     |
+| `ReaderSidebar.vue`                                  | 侧栏容器：文件 / 章节 / 书签标签；挂载 `FileListPanel`、`ChapterListPanel`、`BookmarkListPanel`；与 `useReaderSidebarLists` 等配合                                                                                                                                                                                                                                                                                                                                    |
+| `FileListPanel.vue`                                  | 侧栏「文件」：txt 文件列表、过滤                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `ChapterListPanel.vue`                               | 侧栏「章节」：章节列表、字数开关、跳转当前章                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `BookmarkListPanel.vue`                              | 侧栏「书签」：书签列表、跳转、编辑与清除                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `FontPicker.vue`                                     | 预设字体（跨平台映射，逻辑见 `presetFontDefinitions.ts`）与系统字体列表                                                                                                                                                                                                                                                                                                                                                                                               |
+| `ChapterRulePanel.vue` / `ChapterRuleEditDialog.vue` | 章节匹配规则列表与编辑                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `ColorSchemeTabBar.vue`                              | 配色弹窗内页签：**阅读器** / **高亮色**                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `ColorSchemeReaderPanel.vue`                         | 「阅读器」页：表面色字段网格 + 实时预览（与 `ColorSchemePanel` 草稿联动）                                                                                                                                                                                                                                                                                                                                                                                             |
+| `ColorSchemeHighlightPanel.vue`                      | 「高亮色」页：按槽位编辑 `#RRGGBB`（`HexColorPickerField`）、增删行（不少于 `MIN_HIGHLIGHT_COLORS`）、表格内预览条                                                                                                                                                                                                                                                                                                                                                    |
+| `ColorSchemePanel.vue`                               | 配色弹窗容器：`ColorSchemeTabBar` + 上述两面板；确定时分别 `applyReaderPalettes` 与 **`applyHighlightColors`**（亮/暗各一套数组）写回 `App.vue` 并经 `useAppPersistence` 落盘；打开时从 props 同步草稿                                                                                                                                                                                                                                                                |
+| `HexColorPickerField.vue`                            | 单行十六进制颜色 + HSV 取色浮层（智能上下翻转、视口贴边）；`draftHex` / `draftEnd` 事件供父组件在弹层打开期间做临时预览                                                                                                                                                                                                                                                                                                                                               |
+| `MoreMenu.vue`                                       | 更多菜单：最近文件、查找、快捷键、设置、**配色**（动作 `openColorScheme`，默认 **F6**）、检查更新、关于、退出等；菜单项右侧快捷键文案来自 **`shortcutBindings`**，经 `shortcutUtils.acceleratorToDisplayText` 与快捷键面板及 `shortcutService` 实际生效绑定同步                                                                                                                                                                                                       |
+| `SettingsPanel.vue`                                  | 设置弹窗：启动恢复会话、历史条数、字号/行高、压缩空行保留一行、全屏正文区宽度、**电子书转换缓存目录**（`ebookConvertOutputDir`；默认 `userData`，放空则与源书同目录）等（**高级换行策略**仅在顶栏切换，见 `AppHeader.vue`）；确定后与 `App.vue` 持久化并同步阅读器；**footer 左侧「清除缓存」**（主进程确认框）清空除 `colorTxt.ui.settings` 外的其它 `localStorage` 数据并刷新窗口（见下文「清除缓存」）                                                                                                                                                     |
+| `NumericInput.vue`                                   | 通用数字输入：可选 `min` / `max`、整数模式                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `RangeSlider.vue`                                    | 通用范围滑块（最小/最大值与步进）                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `SwitchToggle.vue`                                   | 通用开关控件                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `ShortcutPanel.vue`                                  | 快捷键列表与编辑：表格展示、点击录制、Enter 确认、冲突提示、全局热键校验；录制区为不可编辑聚焦区 + 闪烁光标，避免 IME 上屏                                                                                                                                                                                                                                                                                                                                            |
+| `AboutPanel.vue`                                     | 关于面板                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `AppModal.vue`                                       | 通用模态框（与 `modalStack` 配合）                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `AppUpdateFlow.vue`                                  | 自更新：检查/下载/安装进度、相关弹窗与 `electron-updater` 事件订阅                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `IconButton.vue`                                     | 图标按钮                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `VirtualList.vue`                                    | 虚拟列表（长列表性能）                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+
+## 电子书解析与转换（`src/renderer/src/ebook`）
+
+渲染进程在**打开电子书**时将其转为 UTF-8 的 ColorTxt 正文（`.txt`），可选写出插图目录；转换与缓存逻辑集中在 `ebook/`，与 `shared/ebookExtensions.ts` 中的扩展名列表保持一致（主进程目录扫描、壳层打开路径判定也依赖该共享模块）。
+
+### 支持的格式与入口
+
+| 扩展名 | 说明 |
+| ------ | ---- |
+| `.epub` | ZIP 容器，走 `parseEpub.ts` |
+| `.mobi` / `.azw3` | 先尝试 `tryConvertZipAsEpub`（部分 AZW3 实为 ePub 封装）；否则经 `mobi/foliateMobi` 抽取后由 `parseMobi.ts` 转产物 |
+| `.fb2` / `.fbz` | FB2 或 ZIP 内单 FB2，`parseFb2.ts` |
+| `.pdf` | `pdfjs-dist` 文本层，`parsePdf.ts` |
+| `.chm` | `parseChm.ts`；底层块读取与 LZX 在 `chm/chmArchive.ts`、`chm/lzxDecode.ts` |
+
+`ebookFormat.ts` 提供 `isEbookFilePath`、`isSupportedBookPath`（TXT + 上述扩展名）、输出用基名 `ebookSourceFileBaseForOutput`（含 Windows 非法字符净化 `sanitizeWindowsFilenameSegment`）。拖放 / 关联打开时 `useAppWindowBindings` 用 `isSupportedBookPath` 过滤；主进程 `ipcHandlers` 的目录枚举用 `EBOOK_DOT_EXTENSIONS` 与 `.txt` 一并收集。
+
+### 转换管线与输出布局
+
+- **调度**：`convertEbookToColorTxt.ts` 中 `convertBookBufferToArtifacts(absSource, buffer)` 按源路径后缀分派各 `parse*.ts`，得到 `ColorTxtArtifacts`（`ebookTypes.ts`：`utf8` + 可选 `imageWrites`，每项含相对路径与 `ArrayBuffer`）。
+- **写出**：`writeEbookConversionArtifacts` 将正文写入目标 `.txt`，插图按 `relativePath` 写到与 `{basename}.txt` **同目录**下；约定目录名为 **`{basename}.Images/`**（由 `imagesDirAbsBesideConvertedTxt` 与相对路径前缀一致）。无插图时会 `removePath` 清理残留插图目录。
+- **正文后处理**：非空行且非独占行的 `<<IMG:…>>` 会在行首加两个全角空格（与阅读器「行首缩进」视觉一致）；空行与插图锚行不改动（见 `indentConvertedTxtPlainLines`）。
+- **让出 UI**：`yieldToUi.ts` 用 `setTimeout(0)` 在长时间解析前后打断，便于底栏「转换中…」等状态刷新；`readBookAsArrayBuffer` 与 `ensureEbookColorTxt` 内多处调用。
+
+### 输出路径与缓存
+
+- **目标 `.txt` 路径**：`resolveConvertedTxtOutputPaths`：基名为源文件名整段（如 `abc.epub` → `abc.epub.txt`）。`ebookConvertOutputDir`（设置项，持久化在 `colorTxt.ui.settings`）**非空**时输出到该目录；**空字符串**表示与**源书同目录**。
+- **缓存命中**：`ensureEbookColorTxt` 若 `file.meta` 中 `convertedTxtPath` + `sourceMtimeMsAtConvert` 与当前源文件 `mtimeMs` 一致且文件仍存在，则直接复用，不再解析。
+- **回退查找**：当 meta 路径失效但源 `mtime` 未变时，按顺序在 **`userData`** 与 **源书所在目录** 查找同名 `{basename}.txt`（`findExistingConvertedTxtInUserDataOrSourceDir`），命中则复用并依赖后续 `setEbookConvertedMeta` 写回 meta。
+- **打开时的实际读取路径**：`useAppFileSession.resolvePhysicalTextForOpen` 对电子书先 `ensureEbookColorTxt`，再对流式管道使用转换后的 `physicalPath`；`physicalReaderPath` 与 `currentFile`（逻辑上书路径）可能不同，会话与最近打开仍以**源书路径**为键。
+
+### 内链标记与阅读器衔接
+
+解析器可在正文中嵌入 **`<<ID:…>>`**（锚点）与 **`<<A:可见文案|目标ID>>`**（可点击链接），转义规则见 `ebookInternalLinkMarkers.ts` 文件头注释；各格式下 `目标 ID` 形态（如 EPUB 为 `文件名#片段`、MOBI 为 `mobi-NNNN#片段`）由对应 `parse*.ts` 约定。
+
+`ReaderMain.vue` 在载入正文后调用 `stripEbookIdAndAMarkersFromText`：去掉 `<<ID:…>>`、将 `<<A:…>>` 替换为可见文案，并建立 `id → 物理行`、内链点击区间与「行首链内标签」映射；与压缩空行配合时使用 `ebookDisplayLineToPhysical` / `ebookAnchorPhysicalToDisplay`（见 `reader/ebookAnchorLookup.ts`）。章节检测侧用 `leadingEbookLinkLabelsByLine` 识别**假章节**（标题以链内链接文案为前缀时跳过）。
+
+插图行 **`<<IMG:…>>`** 由 `monaco/readerImageViewZones.ts` 等与 `pathUtils`（POSIX 风格片段拼接）配合展示，依赖 `colortxt://` 本地协议访问写出后的图片文件。
+
+### 目录与文件速查
+
+| 文件 / 目录 | 职责 |
+| ----------- | ---- |
+| `convertEbookToColorTxt.ts` | 调度解析、路径解析、缓存、写出产物 |
+| `ebookFormat.ts` / `ebookTypes.ts` | 路径判定、产物类型 |
+| `pathUtils.ts` | 路径 join / dirname（FS 语义） |
+| `yieldToUi.ts` | 解析前后让出主线程 |
+| `ebookInternalLinkMarkers.ts` | 内链标记解析、剥离与章节辅助 |
+| `parseEpub.ts` / `parseMobi.ts` / `parsePdf.ts` / `parseFb2.ts` / `parseChm.ts` | 各格式实现 |
+| `chm/` | CHM 归档与 LZX 解码 |
+| `mobi/` | Foliate MOBI 引擎脚本与类型声明 |
+
+新增格式时：在 `shared/ebookExtensions.ts` 增加扩展名；主进程 `isTxtOrEbookFileName` 与 `isSupportedShellOpenPath` 会自动跟随；在 `convertBookBufferToArtifacts` 与 `EBOOK_DOT_EXTENSIONS` 中补全分支与列表；若需新资源类型，扩展 `ColorTxtArtifacts.imageWrites` 或正文约定即可。
 
 ## 全屏阅读与浮动 UI
 
@@ -377,13 +453,13 @@ src/
 
 ### 渲染进程 `localStorage`
 
-| 键名                     | 大致内容                                                                                                                                                                                                                                                                                                                                       |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `colorTxt.ui.settings`  | 界面与阅读偏好：字体、字号与行高倍数，空行压缩/行首缩进、高级换行、内容着色，**`monacoCustomHighlight`**（是否启用自定义高亮词管线），**`highlightColorsLight` / `highlightColorsDark`**（自定义高亮色 `#RRGGBB` 数组，长度不足 `MIN_HIGHLIGHT_COLORS` 时解析失败则回退默认；与默认逐项相同可不写入），章节匹配规则、主题、侧栏是否展开，侧栏的宽度、章节字数显示，设置里的启动是否恢复会话、最近文件条数上限、全屏正文区宽度，**可选字段 `shortcutBindings`**（各快捷键动作 ID → 快捷键字符串，缺省则使用 `shortcutRegistry` 默认）等（结构见 `PersistedSettingsData`），**`readerPaletteOverridesLight` / `readerPaletteOverridesDark`**（阅读器表面色，由 `ColorSchemePanel` 确定后写入）等（结构见 `PersistedSettingsData` / `cacheStore.ts`） |
-| `colorTxt.session`      | 会话快照：当前文件路径、视口底部物理行号（`viewportBottomLine`，用于下次启动恢复阅读位置；是否恢复受设置项控制；章节列表在重新打开文件后由流式解析生成）                                                                                                                                                                                       |
-| `colorTxt.file.list`    | 导入目录后的 txt 文件列表缓存（路径、显示名、大小等）                                                                                                                                                                                                                                                                                          |
-| `colorTxt.file.meta`    | 按文件路径聚合的元数据：书签、阅读进度百分比、**Monaco `saveViewState()` 序列化结果**（`editorViewState`）、**视口首行物理行号**（`viewportTopPhysicalLine`，与视图状态同时写入，用于压缩空行映射校验）、**`highlightWordsByIndex`**（高亮色槽位索引 → 该文件下自定义词字符串数组，与 `fileMetaStore` 规范化/合并 API 配合）、`updatedAt` 等（结构见 `FileMetaRecord` / `fileMetaStore.ts`）                                                                        |
-| `colorTxt.recent.files` | 最近打开记录：JSON 数组，每项**仅允许** `{ "path": "<文件路径>" }` 单键对象（MRU 顺序）；条数上限由设置决定（0～1000，默认 20，0 表示不记录）。阅读进度与视口恢复一律查 `colorTxt.file.meta`                                                                                                                                                  |
+| 键名                    | 大致内容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `colorTxt.ui.settings`  | 界面与阅读偏好：字体、字号与行高倍数，空行压缩/行首缩进、高级换行、内容着色，**`monacoCustomHighlight`**（是否启用自定义高亮词管线），**`highlightColorsLight` / `highlightColorsDark`**（自定义高亮色 `#RRGGBB` 数组，长度不足 `MIN_HIGHLIGHT_COLORS` 时解析失败则回退默认；与默认逐项相同可不写入），章节匹配规则、主题、侧栏是否展开，侧栏的宽度、章节字数显示，设置里的启动是否恢复会话、最近文件条数上限、全屏正文区宽度，**`ebookConvertOutputDir`**（电子书转换生成的 `{basename}.txt` 输出目录；空串表示与源书同目录，首次无该键时默认指向 `userData`，见 `useAppPersistence`），**可选字段 `shortcutBindings`**（各快捷键动作 ID → 快捷键字符串，缺省则使用 `shortcutRegistry` 默认）等（结构见 `PersistedSettingsData`），**`readerPaletteOverridesLight` / `readerPaletteOverridesDark`**（阅读器表面色，由 `ColorSchemePanel` 确定后写入）等（结构见 `PersistedSettingsData` / `cacheStore.ts`） |
+| `colorTxt.session`      | 会话快照：当前文件路径、视口底部物理行号（`viewportBottomLine`，用于下次启动恢复阅读位置；是否恢复受设置项控制；章节列表在重新打开文件后由流式解析生成）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `colorTxt.file.list`    | 导入目录后的 txt 文件列表缓存（路径、显示名、大小等）                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `colorTxt.file.meta`    | 按文件路径聚合的元数据：书签、阅读进度百分比、**Monaco `saveViewState()` 序列化结果**（`editorViewState`）、**视口首行物理行号**（`viewportTopPhysicalLine`，与视图状态同时写入，用于压缩空行映射校验）、**`highlightWordsByIndex`**（高亮色槽位索引 → 该文件下自定义词字符串数组，与 `fileMetaStore` 规范化/合并 API 配合）；**电子书**：**`convertedTxtPath`**（上次成功转换得到的 `.txt` 绝对路径）、**`sourceMtimeMsAtConvert`**（写入上述路径时源电子书 `mtimeMs`，与 `ensureEbookColorTxt` 缓存失效一致）、`updatedAt` 等（结构见 `FileMetaRecord` / `fileMetaStore.ts`）                                                                                                                                                                                                                                                                                                                                                       |
+| `colorTxt.recent.files` | 最近打开记录：JSON 数组，每项**仅允许** `{ "path": "<文件路径>" }` 单键对象（MRU 顺序）；条数上限由设置决定（0～1000，默认 20，0 表示不记录）。阅读进度与视口恢复一律查 `colorTxt.file.meta`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 阅读进度口径说明：
 
