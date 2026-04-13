@@ -66,18 +66,11 @@ export default defineConfig({
         entry: resolve(__electronViteConfigDir, "src/main/index.ts"),
       },
       rollupOptions: {
-        // Keep `font-list` as a runtime dependency so its internal `./libs/core`
-        // relative requires resolve from `node_modules/font-list/`.
-        // `iconv-lite` + `jschardet` are runtime-only and can remain in node_modules.
-        external: [
-          "font-list",
-          "iconv-lite",
-          "jschardet",
-          "jszip",
-          "pako",
-          "pdfjs-dist",
-          "electron-updater",
-        ],
+        // `font-list` 依赖包内 `./libs/core` 等相对路径，需保留在 node_modules。
+        // `iconv-lite` 常含动态编码加载，保持 external。
+        // `jschardet` 由 Rollup 打入主包；`jszip`/`pako` 仅 renderer 使用，主进程勿 external。
+        // `electron-updater` 保持 CJS 动态 require 与依赖树习惯用法。
+        external: ["font-list", "iconv-lite", "electron-updater"],
       },
     },
   },

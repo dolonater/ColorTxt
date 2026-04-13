@@ -18,11 +18,7 @@
   "dependencies": {
     "electron-updater": "^6.8.3",
     "font-list": "^2.0.2",
-    "iconv-lite": "^0.7.2",
-    "jschardet": "^3.1.4",
-    "jszip": "^3.10.1",
-    "pako": "^2.1.0",
-    "pdfjs-dist": "^5.6.205"
+    "iconv-lite": "^0.7.2"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
@@ -31,7 +27,11 @@
     "electron": "^35.1.4",
     "electron-builder": "^26.0.12",
     "electron-vite": "^3.0.0",
+    "jschardet": "^3.1.4",
+    "jszip": "^3.10.1",
     "monaco-editor": "^0.55.1",
+    "pako": "^2.1.0",
+    "pdfjs-dist": "^5.6.205",
     "typescript": "^5.8.2",
     "vite": "^6.2.3",
     "vite-plugin-monaco-editor": "^1.1.0",
@@ -44,7 +44,7 @@
     "directories": {
       "output": "release"
     },
-    "asar": false,
+    "asar": true,
     "extraResources": [
       {
         "from": "resources/icon.png",
@@ -58,6 +58,11 @@
     "files": [
       "dist/**",
       "package.json"
+    ],
+    "electronLanguages": [
+      "en-US",
+      "zh-CN",
+      "zh-TW"
     ],
     "fileAssociations": [
       {
@@ -75,6 +80,12 @@
       "artifactName": "${productName}-${version}.${ext}",
       "target": [
         "dmg"
+      ],
+      "electronLanguages": [
+        "en",
+        "en_GB",
+        "zh_CN",
+        "zh_TW"
       ]
     },
     "win": {
