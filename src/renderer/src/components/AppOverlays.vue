@@ -272,7 +272,7 @@ onBeforeUnmount(() => {
 .dirScanLine {
   margin: 0;
   max-width: min(92vw, 720px);
-  font-size: 12px;
+  font-size: 14px;
   color: #ffffff;
   text-align: center;
   word-break: break-all;
