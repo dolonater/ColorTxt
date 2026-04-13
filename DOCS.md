@@ -156,8 +156,7 @@ src/
 │       │   ├── useReaderSidebarLists.ts   # 侧栏文件/章节/书签虚拟列表、过滤与滚动同步
 │       │   └── useTxtStreamPipeline.ts    # 大文件流式解析：物理行/显示行映射、章节累加、空行压缩与章节留白标准化；正文在缓冲区累积，流结束再一次性 setFullText/setChapters（见 `ipcHandlers` 小节「渲染进程与 Monaco 写入」）
 │       ├── constants/
-│       │   ├── appUi.ts          # UI 常量：存储 key、侧栏宽度、字号/行高上下限与步进、`default*` 出厂默认等（无本地设置或与 `persistKey` 字段缺失时；见下文
-│       「阅读器字号与行高」「界面与阅读偏好默认值」）；re-export `readerPalette` 的 `applyReaderSurfaceToDocument` 等
+│       │   ├── appUi.ts          # UI 常量：存储 key、侧栏宽度、字号/行高上下限与步进、`default*` 出厂默认等（无本地设置或与 `persistKey` 字段缺失时；见下文「阅读器字号与行高」「界面与阅读偏好默认值」）；re-export `readerPalette` 的 `applyReaderSurfaceToDocument` 等
 │       │   ├── readerPalette.ts  # 阅读器表面色（背景、章节标题、Monaco txtr token）默认值与合并逻辑；用户覆盖存 `colorTxt.ui.settings` 的 `readerPaletteOverridesLight` / `readerPaletteOverridesDark`；`useAppShellThemeWatch` 写入 `html` 的 `--reader-bg`、`--reader-chapter-title`
 │       │   └── highlightColors.ts # 自定义高亮色：默认亮/暗两套 `#RRGGBB` 数组、`MIN_HIGHLIGHT_COLORS`（至少 3 色）、`parseHighlightColorsArray` / `mergeHighlightColors` 等与设置持久化配合
 │       ├── monaco/           # Monaco 阅读器扩展（与 ReaderMain 配合）
@@ -332,8 +331,8 @@ src/
 
 `ebookFormat.ts` 提供 `isEbookFilePath`、`isSupportedBookPath`（TXT + 上述扩展名）、输出用基名 `ebookSourceFileBaseForOutput`（含 Windows 非法字符净化 `sanitizeWindowsFilenameSegment`）。拖放 / 关联打开时 `useAppWindowBindings` 用 `isSupportedBookPath` 过滤；主进程 `ipcHandlers` 的目录枚举用 `EBOOK_DOT_EXTENSIONS` 与 `.txt` 一并收集。
 
-- `.chm` 格式的解析是基于 [libmspack](https://github.com/kyz/libmspack)（GNU GPL 协议）做的 JavaScript 实现
-- 其他电子书格式的解析主要参考 [foliate-js](https://github.com/johnfactotum/foliate-js)（MIT 协议）
+- `.chm` 格式的解析是基于 [libmspack](https://github.com/kyz/libmspack)（GNU GPL）做的 JavaScript 实现
+- 其他电子书格式的解析主要参考 [foliate-js](https://github.com/johnfactotum/foliate-js)（MIT）
 
 ### 转换管线与输出布局
 
