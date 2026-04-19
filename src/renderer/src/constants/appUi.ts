@@ -42,6 +42,19 @@ export const FULLSCREEN_TOP_EDGE_PX = 20;
 export const FULLSCREEN_BOTTOM_EDGE_PX = 20;
 export const FULLSCREEN_RIGHT_SCROLLBAR_GUTTER_PX = 20;
 
+/**
+ * 侧栏文件列表等 Teleport 到 `body` 的浮层根节点应带对应 `data-*` 属性，
+ * 全屏浮动侧栏的 `mouseleave`、`.layout` 按下收起、空白区滚轮等逻辑据此白名单识别。
+ */
+export const FULLSCREEN_SIDEBAR_FLOAT_SELECTOR =
+  "[data-fullscreen-sidebar-float]";
+
+/**
+ * `AppModal` 蒙层根节点带此属性；全屏浮动顶栏 `mouseleave` 时移入弹层不视为离开顶栏交互区。
+ */
+export const FULLSCREEN_HEADER_FLOAT_SELECTOR =
+  "[data-fullscreen-header-float]";
+
 export const persistKey = "colorTxt.ui.settings";
 export const sessionKey = "colorTxt.session";
 export const fileListKey = "colorTxt.file.list";

@@ -81,6 +81,7 @@ onBeforeUnmount(() => {
     <div
       v-if="modelValue"
       class="appModalBackdrop"
+      data-fullscreen-header-float
       :style="{ zIndex }"
       role="dialog"
       aria-modal="true"

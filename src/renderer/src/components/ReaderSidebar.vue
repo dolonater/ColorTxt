@@ -35,6 +35,8 @@ const props = withDefaults(
     activeScrollMode?: "edge" | "center";
     /** 全屏浮动侧栏时章节列表不使用平滑滚动（避免与呼出动画叠加） */
     inFullscreen?: boolean;
+    /** 全屏浮动侧栏是否展开（用于文件列表 Teleport 浮层随侧栏收起而关闭） */
+    showFullscreenSidebar?: boolean;
     /** 章节列表当前项是否平滑滚入视口（由 App 在阅读滚动导致换章时置为 true） */
     chapterListScrollSmooth?: boolean;
     /** App 在需将当前章滚入视口/居中时置为 true（一拍后清除） */
@@ -49,6 +51,7 @@ const props = withDefaults(
   }>(),
   {
     inFullscreen: false,
+    showFullscreenSidebar: undefined,
     chapterListScrollSmooth: false,
     shouldCenterChapterList: false,
     shouldCenterFileList: false,
@@ -85,6 +88,7 @@ const emit = defineEmits<{
     },
   ];
   setFilesCategory: [paths: string[], category: string];
+  "update:fullscreenFileListPopoversOpen": [open: boolean];
 }>();
 
 const {
@@ -173,6 +177,7 @@ defineExpose({
     />
     <FileListPanel
       v-show="activeTab === 'files'"
+      :show-fullscreen-sidebar="showFullscreenSidebar"
       :files="fileRowsEnriched"
       :files-filtered="filesFiltered"
       :file-filter-query="fileFilterQuery"
@@ -195,6 +200,9 @@ defineExpose({
       @remove-file-list="emit('removeFileList', $event)"
       @import-dropped-paths="emit('importDroppedPaths', $event)"
       @bind-list-ref="bindFileListRef"
+      @update:fullscreen-file-list-popovers-open="
+        emit('update:fullscreenFileListPopoversOpen', $event)
+      "
     />
     <BookmarkListPanel
       v-show="activeTab === 'bookmarks'"

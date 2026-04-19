@@ -175,8 +175,9 @@ export function useAppReaderUiPrefs(deps: {
   }
 
   function onToggleFind() {
-    toggleReaderFind();
+    // 全屏下先收顶栏再切换查找（关闭查找时顶栏本可保持，再收一次无害）
     if (deps.isFullscreenView.value) deps.showFullscreenHeader.value = false;
+    toggleReaderFind();
   }
 
   return {

@@ -1066,6 +1066,22 @@ function isFindWidgetRevealed(): boolean {
   return findCtrl?.getState?.().isRevealed === true;
 }
 
+/** 全屏顶栏收起等场景：仅当查找栏已显示时关闭，不打开查找栏 */
+function closeFindWidgetIfRevealed() {
+  const e = editor.value;
+  if (!e) return;
+  const findCtrl = e.getContribution(FIND_CONTROLLER_ID) as {
+    getState?: () => { isRevealed: boolean };
+    closeFindWidget?: () => void;
+  } | null;
+  if (findCtrl?.getState?.().isRevealed !== true) return;
+  if (findCtrl.closeFindWidget) {
+    findCtrl.closeFindWidget();
+    return;
+  }
+  e.getAction("closeFindWidget")?.run();
+}
+
 type FindControllerStartOpts = {
   forceRevealReplace: boolean;
   seedSearchStringFromSelection: "none" | "single" | "multiple";
@@ -1370,6 +1386,7 @@ defineExpose({
   getAllText,
   getSelectedText,
   toggleFindWidget,
+  closeFindWidgetIfRevealed,
   openFindWithSearchString,
   isFindWidgetRevealed,
   focusEditor,

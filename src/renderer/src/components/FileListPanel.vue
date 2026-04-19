@@ -51,6 +51,8 @@ const props = withDefaults(
     fileCategory: string;
     fileSort: FileSortMode;
     fileCategoryCatalog: FileCategoryDefinition[];
+    /** 全屏浮动侧栏是否展开；从展开变为收起时关闭 Teleport 到 body 的浮层 */
+    showFullscreenSidebar?: boolean;
   }>(),
   {
     metaProgressMap: () => new Map<string, number>(),
@@ -59,6 +61,8 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
+  /** 全屏侧栏：文件列表 Teleport 弹层是否打开（供收起侧栏逻辑） */
+  "update:fullscreenFileListPopoversOpen": [open: boolean];
   updateFileFilterQuery: [value: string];
   "update:fileCategory": [value: string];
   "update:fileSort": [value: FileSortMode];
@@ -164,6 +168,51 @@ const menus = reactive(
     invertSelectionVisible: selection.invertSelectionVisible,
     selectSinglePathForContextMenu: selection.selectSinglePathForContextMenu,
   }),
+);
+
+const categoryToolbarSelectRef = ref<InstanceType<typeof AppCustomSelect> | null>(
+  null,
+);
+const sortToolbarSelectRef = ref<InstanceType<typeof AppCustomSelect> | null>(
+  null,
+);
+
+const categorySelectPanelOpen = ref(false);
+const sortSelectPanelOpen = ref(false);
+
+const fullscreenFileListPopoversOpenComputed = computed(
+  () =>
+    Boolean(
+      menus.fileContextMenuOpen ||
+        menus.editContextMenuOpen ||
+        menus.categoryPickerOpen ||
+        manageModalOpen.value ||
+        categorySelectPanelOpen.value ||
+        sortSelectPanelOpen.value,
+    ),
+);
+
+watch(
+  fullscreenFileListPopoversOpenComputed,
+  (v) => emit("update:fullscreenFileListPopoversOpen", v),
+  { immediate: true },
+);
+
+function dismissAllFullscreenTeleportUi() {
+  menus.dismissAllTeleportMenus();
+  filterVisible.value = false;
+  manageModalOpen.value = false;
+  categoryToolbarSelectRef.value?.closePanel?.();
+  sortToolbarSelectRef.value?.closePanel?.();
+}
+
+watch(
+  () => props.showFullscreenSidebar,
+  (vis, prev) => {
+    if (prev !== true) return;
+    if (vis === true) return;
+    dismissAllFullscreenTeleportUi();
+  },
 );
 
 const editCtxMenuPanelRef = useTemplateRef<HTMLElement>("editCtxMenuPanelRef");
@@ -374,6 +423,7 @@ function onFileListDrop(ev: DragEvent) {
         :class="{ 'fileToolbarRow--filterOpen': filterVisible }"
       >
         <AppCustomSelect
+          ref="categoryToolbarSelectRef"
           class="fileToolbarSelect"
           :model-value="fileCategory"
           :display-label="categoryTriggerLabel"
@@ -387,8 +437,10 @@ function onFileListDrop(ev: DragEvent) {
           category-color-marks
           @update:model-value="onCategorySelect"
           @action="onCategoryAction"
+          @panel-open-change="categorySelectPanelOpen = $event"
         />
         <AppCustomSelect
+          ref="sortToolbarSelectRef"
           class="fileToolbarSelect"
           :model-value="fileSort"
           :display-label="sortDisplayLabel"
@@ -399,6 +451,7 @@ function onFileListDrop(ev: DragEvent) {
           :scroll-max-height="430"
           ariaLabel="文件排序"
           @update:model-value="onSortSelect"
+          @panel-open-change="sortSelectPanelOpen = $event"
         />
         <button
           type="button"
@@ -575,6 +628,7 @@ function onFileListDrop(ev: DragEvent) {
       <div
         v-if="menus.editContextMenuOpen"
         ref="editCtxMenuPanelRef"
+        data-fullscreen-sidebar-float
         class="editCtxMenu appShellMenuPanel"
         :style="{
           left: `${editCtxMenuLeft}px`,
@@ -683,6 +737,7 @@ function onFileListDrop(ev: DragEvent) {
     <Teleport to="body">
       <div
         v-if="menus.editContextMenuOpen"
+        data-fullscreen-sidebar-float
         class="editCtxMenuBackdrop"
         @pointerdown="menus.closeEditContextMenu"
       />

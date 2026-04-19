@@ -93,6 +93,8 @@ const emit = defineEmits<{
   removeHighlightTerm: [text: string];
   /** 点击高亮词项：父组件应钉书钉（若未钉）并打开 Monaco 查找该词 */
   findHighlightTerm: [text: string];
+  /** 全屏顶栏：高亮词下拉是否展开（供顶栏收起逻辑） */
+  "update:highlightMenuOpen": [open: boolean];
 }>();
 
 const highlightMenuOpen = ref(false);
@@ -160,19 +162,24 @@ const onPointerDown = (ev: PointerEvent) => {
   closeHighlightMenu();
 };
 
-watch(highlightMenuOpen, async (open) => {
-  if (open) {
-    await nextTick();
-    updateHighlightMenuScrollbarFlag();
-    bindHighlightMenuBodyResizeObserver();
-    requestAnimationFrame(() => {
+watch(
+  highlightMenuOpen,
+  async (open) => {
+    emit("update:highlightMenuOpen", open);
+    if (open) {
+      await nextTick();
       updateHighlightMenuScrollbarFlag();
-    });
-  } else {
-    unbindHighlightMenuBodyResizeObserver();
-    highlightMenuBodyHasScrollbar.value = false;
-  }
-});
+      bindHighlightMenuBodyResizeObserver();
+      requestAnimationFrame(() => {
+        updateHighlightMenuScrollbarFlag();
+      });
+    } else {
+      unbindHighlightMenuBodyResizeObserver();
+      highlightMenuBodyHasScrollbar.value = false;
+    }
+  },
+  { immediate: true },
+);
 
 watch(
   () => props.highlightTerms.length,

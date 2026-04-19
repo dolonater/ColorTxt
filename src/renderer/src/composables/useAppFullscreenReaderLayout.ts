@@ -4,6 +4,7 @@ import {
   maxFullscreenReaderWidthPercent,
   minFullscreenReaderWidthPercent,
 } from "../constants/appUi";
+import { nodeIsUnderFullscreenSidebarFloat } from "../utils/fullscreenSidebarFloat";
 
 type ReaderRef = Ref<InstanceType<typeof ReaderMain> | null>;
 
@@ -67,17 +68,21 @@ export function useAppFullscreenReaderLayout(deps: {
       for (const node of ev.composedPath()) {
         if (node instanceof Node && nodeIsUnderSidebar(sidebar, node))
           return true;
+        if (node instanceof Node && nodeIsUnderFullscreenSidebarFloat(node))
+          return true;
       }
     }
 
     const t = ev.target;
     if (t instanceof Node && nodeIsUnderSidebar(sidebar, t)) return true;
+    if (t instanceof Node && nodeIsUnderFullscreenSidebarFloat(t)) return true;
 
     if (ev instanceof WheelEvent || ev instanceof MouseEvent) {
       const { clientX, clientY } = ev;
       if (Number.isFinite(clientX) && Number.isFinite(clientY)) {
         const top = document.elementFromPoint(clientX, clientY);
         if (top && nodeIsUnderSidebar(sidebar, top)) return true;
+        if (top && nodeIsUnderFullscreenSidebarFloat(top)) return true;
       }
     }
 

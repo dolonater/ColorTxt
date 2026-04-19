@@ -152,6 +152,7 @@ function pick(name: string) {
     <div
       v-if="open"
       ref="menuRef"
+      data-fullscreen-sidebar-float
       class="catPickMenu appShellMenuPanel"
       role="menu"
       :style="{

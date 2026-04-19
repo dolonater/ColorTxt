@@ -50,6 +50,13 @@ export function useFileListMenus(
     categoryPickerOpen.value = false;
   }
 
+  /** 全屏浮动侧栏收起等场景：关掉所有挂到 `body` 的文件列表菜单 */
+  function dismissAllTeleportMenus() {
+    closeFileContextMenu();
+    closeEditContextMenu();
+    closeCategoryPicker();
+  }
+
   function openCategoryPickerAt(x: number, y: number, fromFooter: boolean) {
     categoryPickX.value = x;
     categoryPickY.value = y;
@@ -147,6 +154,7 @@ export function useFileListMenus(
     closeFileContextMenu,
     closeEditContextMenu,
     closeCategoryPicker,
+    dismissAllTeleportMenus,
     onFooterCategoryClick,
     onEditMenuCategoryPicked,
     onCategoryPicked,

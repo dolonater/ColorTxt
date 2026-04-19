@@ -93,7 +93,15 @@ import {
 } from "./constants/fileCategories";
 
 const readerRef = ref<InstanceType<typeof ReaderMain> | null>(null);
-const chrome = useAppReaderChrome({ readerRef });
+/** 全屏侧栏文件列表是否有 Teleport 弹层打开（分类/筛选下拉、右键菜单等） */
+const fullscreenFileListPopoversOpen = ref(false);
+/** 全屏顶栏：高亮词下拉是否打开 */
+const fullscreenHeaderHighlightMenuOpen = ref(false);
+const chrome = useAppReaderChrome({
+  readerRef,
+  fullscreenFileListPopoversOpen,
+  fullscreenHeaderHighlightMenuOpen,
+});
 const {
   isFullscreenView,
   showFullscreenTip,
@@ -124,6 +132,7 @@ const {
   dismissFullscreenChromeForNativeExit,
   fullscreenCursorHidden,
   bumpFullscreenCursorIdle,
+  recordFullscreenPointer,
 } = chrome;
 
 function setFullscreenHeaderOverlayEl(
@@ -812,6 +821,10 @@ function onFindHighlightTermFromHeader(text: string) {
   readerRef.value?.openFindWithSearchString?.(text);
 }
 
+function onHeaderHighlightMenuOpen(open: boolean) {
+  fullscreenHeaderHighlightMenuOpen.value = open;
+}
+
 function applySettings(payload: SettingsApplyPayload) {
   const prevCompressBlankKeepOneBlank = compressBlankKeepOneBlank.value;
   compressBlankKeepOneBlank.value = payload.compressBlankKeepOneBlank;
@@ -898,6 +911,7 @@ useAppWindowBindings({
   endSidebarResize,
   dismissFullscreenChromeForNativeExit,
   bumpFullscreenCursorIdle,
+  recordFullscreenPointer,
   enterOrExitFullscreenView,
   pulseChapterListCenter,
   currentTheme,
@@ -1013,6 +1027,7 @@ useAppShellThemeWatch({
         @bookmark-click="onBookmarkClick"
         @remove-highlight-term="onRemoveHighlightTermFromHeader"
         @find-highlight-term="onFindHighlightTermFromHeader"
+        @update:highlight-menu-open="onHeaderHighlightMenuOpen"
         @go-back-from-pin="onGoBackFromPin"
         @change-theme="currentTheme = $event"
         @toggle-sidebar="showSidebar = !showSidebar"
@@ -1061,6 +1076,9 @@ useAppShellThemeWatch({
           ref="readerSidebarRef"
           active-scroll-mode="center"
           :in-fullscreen="isFullscreenView"
+          :show-fullscreen-sidebar="
+            isFullscreenView ? showFullscreenSidebar : undefined
+          "
           :chapter-list-scroll-smooth="chapterListScrollSmooth"
           :should-center-chapter-list="shouldCenterChapterList"
           :should-center-file-list="shouldCenterFileList"
@@ -1097,6 +1115,9 @@ useAppShellThemeWatch({
           @update:file-sort="fileSort = $event"
           @apply-category-catalog="onApplyCategoryCatalog"
           @set-files-category="onSetFilesCategory"
+          @update:fullscreen-file-list-popovers-open="
+            fullscreenFileListPopoversOpen = $event
+          "
         />
         <!-- 放在侧栏容器内，避免移到拖条时触发 @mouseleave 导致全屏侧栏收起 -->
         <div

@@ -47,6 +47,8 @@ export function useAppWindowBindings(deps: {
   dismissFullscreenChromeForNativeExit: () => void;
   /** 全屏下鼠标移动时重置「空闲隐藏光标」计时 */
   bumpFullscreenCursorIdle: () => void;
+  /** 全屏下记录指针坐标，供侧栏浮层关闭后判断是否应收起 */
+  recordFullscreenPointer?: (ev: MouseEvent) => void;
   enterOrExitFullscreenView: () => Promise<void>;
   pulseChapterListCenter: (smooth: boolean) => void;
   currentTheme: Ref<string>;
@@ -519,6 +521,9 @@ export function useAppWindowBindings(deps: {
       deps.updateFullscreenHeaderHover(ev);
       deps.updateFullscreenFooterHover(ev);
       deps.updateFullscreenSidebarHover(ev);
+      if (deps.isFullscreenView.value) {
+        deps.recordFullscreenPointer?.(ev);
+      }
       if (deps.isFullscreenView.value && !deps.resizingSidebar.value) {
         deps.bumpFullscreenCursorIdle();
       }

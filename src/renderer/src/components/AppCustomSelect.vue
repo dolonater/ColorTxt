@@ -69,6 +69,8 @@ const emit = defineEmits<{
   "update:modelValue": [id: string];
   /** 特殊项（如「分类管理」）不更新 modelValue 时发出 */
   action: [id: string];
+  /** 下拉 Teleport 面板展开状态，供全屏侧栏收起逻辑等使用 */
+  "panel-open-change": [open: boolean];
 }>();
 
 const open = ref(false);
@@ -168,6 +170,7 @@ function onKey(ev: KeyboardEvent) {
 }
 
 watch(open, async (v) => {
+  emit("panel-open-change", v);
   if (v) {
     await nextTick();
     await positionPanel();
@@ -181,7 +184,7 @@ watch(open, async (v) => {
     unbindScrollAreaResizeObserver();
     scrollAreaHasScrollbar.value = false;
   }
-});
+}, { immediate: true });
 
 watch(
   () => [props.scrollItems.length, props.scrollMaxHeight] as const,
@@ -202,6 +205,11 @@ onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", onDocPointerDown);
   document.removeEventListener("keydown", onKey, true);
   window.removeEventListener("resize", close);
+});
+
+defineExpose({
+  /** 供父级在全屏侧栏收起等时机强制收合 Teleport 面板 */
+  closePanel: close,
 });
 
 function itemButtonClass(it: Extract<CustomSelectItem, { kind: "item" }>) {
@@ -263,6 +271,7 @@ function itemMarkBackground(it: Extract<CustomSelectItem, { kind: "item" }>) {
       <div
         v-if="open"
         ref="panelRef"
+        data-fullscreen-sidebar-float
         class="customSelectPanel appShellMenuPanel"
         role="listbox"
         :style="{

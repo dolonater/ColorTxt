@@ -8,6 +8,8 @@ import {
   SIDEBAR_MIN_READER_WIDTH,
   SIDEBAR_MIN_WIDTH,
 } from "../constants/appUi";
+import { nodeIsUnderFullscreenHeaderFloat } from "../utils/fullscreenHeaderFloat";
+import { nodeIsUnderFullscreenSidebarFloat } from "../utils/fullscreenSidebarFloat";
 
 /** 全屏下鼠标静止超过该时间后隐藏光标 */
 const FULLSCREEN_CURSOR_HIDE_IDLE_MS = 2000;
@@ -45,7 +47,13 @@ function nodeIsUnderFullscreenPanel(panel: HTMLElement, start: Node | null) {
  * - 面板根节点 `@mouseleave`：全屏且已显示时收起（与真实命中区域一致）；
  * - `.layout` `mousedown`：全屏时收起顶栏/底栏/侧栏（点击落在已展开侧栏内除外）。
  */
-export function useAppReaderChrome(deps: { readerRef: ReaderRef }) {
+export function useAppReaderChrome(deps: {
+  readerRef: ReaderRef;
+  /** 全屏侧栏文件列表：Teleport 弹层是否打开；为真时 `mouseleave` 不收起侧栏，关闭后再按指针位置判断 */
+  fullscreenFileListPopoversOpen: Ref<boolean>;
+  /** 全屏顶栏：高亮词下拉是否打开；为真时不收起顶栏，且查找栏打开时也不强制收起顶栏 */
+  fullscreenHeaderHighlightMenuOpen: Ref<boolean>;
+}) {
   const isFullscreenView = ref(false);
   const showFullscreenTip = ref(false);
   const fullscreenTipFading = ref(false);
@@ -59,6 +67,10 @@ export function useAppReaderChrome(deps: { readerRef: ReaderRef }) {
   /** 全屏时鼠标靠近左边缘显示的浮动章节侧栏 */
   const showFullscreenSidebar = ref(false);
   const fullscreenSidebarOverlayRef = ref<HTMLElement | null>(null);
+
+  /** 供「文件列表浮层关闭后」判断是否应收起全屏侧栏（与 `mousemove` 同步） */
+  const lastFullscreenPointerClientX = ref(0);
+  const lastFullscreenPointerClientY = ref(0);
 
   const sidebarWidth = ref(270);
   /** 全屏专用侧栏宽度；非全屏为 null（退出全屏时销毁，窗口态仍用 sidebarWidth） */
@@ -243,6 +255,12 @@ export function useAppReaderChrome(deps: { readerRef: ReaderRef }) {
   }
 
   /** 全屏左缘感应：仅负责唤起。收起由侧栏容器 @mouseleave 处理。 */
+  function recordFullscreenPointer(ev: MouseEvent) {
+    if (!isFullscreenView.value) return;
+    lastFullscreenPointerClientX.value = ev.clientX;
+    lastFullscreenPointerClientY.value = ev.clientY;
+  }
+
   function updateFullscreenSidebarHover(ev: MouseEvent) {
     if (!isFullscreenView.value) return;
     if (showFullscreenSidebar.value) return;
@@ -252,17 +270,79 @@ export function useAppReaderChrome(deps: { readerRef: ReaderRef }) {
     }
   }
 
-  function onFullscreenSidebarMouseLeave() {
+  /** 指针既不在侧栏子树也不在侧栏 Teleport 白名单上时收起全屏浮动侧栏 */
+  function tryCollapseFullscreenSidebarFromPointer(
+    clientX: number,
+    clientY: number,
+  ) {
+    if (!isFullscreenView.value || !showFullscreenSidebar.value) return;
+    if (resizingSidebar.value) return;
+    if (deps.fullscreenFileListPopoversOpen.value) return;
+    const top = document.elementFromPoint(clientX, clientY);
+    if (top && nodeIsUnderFullscreenSidebarFloat(top)) return;
+    const sidebar = fullscreenSidebarOverlayRef.value;
+    if (sidebar && top && nodeIsUnderFullscreenPanel(sidebar, top)) return;
+    showFullscreenSidebar.value = false;
+  }
+
+  function onFullscreenSidebarMouseLeave(ev: MouseEvent) {
     if (!isFullscreenView.value) return;
     if (resizingSidebar.value) return;
-    showFullscreenSidebar.value = false;
+    if (deps.fullscreenFileListPopoversOpen.value) return;
+    const rt = ev.relatedTarget;
+    if (rt instanceof Node && nodeIsUnderFullscreenSidebarFloat(rt)) return;
+    const { clientX, clientY } = ev;
+    requestAnimationFrame(() => {
+      if (!isFullscreenView.value || !showFullscreenSidebar.value) return;
+      if (deps.fullscreenFileListPopoversOpen.value) return;
+      tryCollapseFullscreenSidebarFromPointer(clientX, clientY);
+    });
+  }
+
+  watch(
+    () => deps.fullscreenFileListPopoversOpen.value,
+    (open, wasOpen) => {
+      if (wasOpen !== true || open !== false) return;
+      if (!isFullscreenView.value || !showFullscreenSidebar.value) return;
+      requestAnimationFrame(() => {
+        if (deps.fullscreenFileListPopoversOpen.value) return;
+        tryCollapseFullscreenSidebarFromPointer(
+          lastFullscreenPointerClientX.value,
+          lastFullscreenPointerClientY.value,
+        );
+      });
+    },
+  );
+
+  /** 收起全屏顶栏并关闭已显示的 Monaco 查找栏（不经过 `watch`，避免与 `onToggleFind` 同 tick 竞态） */
+  function collapseFullscreenHeaderAndCloseFindIfRevealed() {
+    if (!isFullscreenView.value) return;
+    if (!showFullscreenHeader.value) return;
+    showFullscreenHeader.value = false;
+    deps.readerRef.value?.closeFindWidgetIfRevealed?.();
+  }
+
+  /** 指针既不在顶栏子树也不在顶栏相关 AppModal 蒙层上时收起全屏浮动顶栏 */
+  function tryCollapseFullscreenHeaderFromPointer(
+    clientX: number,
+    clientY: number,
+  ) {
+    if (!isFullscreenView.value || !showFullscreenHeader.value) return;
+    if (deps.fullscreenHeaderHighlightMenuOpen.value) return;
+    const top = document.elementFromPoint(clientX, clientY);
+    if (top && nodeIsUnderFullscreenHeaderFloat(top)) return;
+    const header = fullscreenHeaderOverlayRef.value;
+    if (header && top && nodeIsUnderFullscreenPanel(header, top)) return;
+    collapseFullscreenHeaderAndCloseFindIfRevealed();
   }
 
   /** 全屏顶缘感应区：仅负责唤起。收起由顶栏容器 @mouseleave 处理（与真实命中区域一致）。 */
   function updateFullscreenHeaderHover(ev: MouseEvent) {
     if (!isFullscreenView.value) return;
     if (deps.readerRef.value?.isFindWidgetRevealed?.()) {
-      showFullscreenHeader.value = false;
+      if (!deps.fullscreenHeaderHighlightMenuOpen.value) {
+        collapseFullscreenHeaderAndCloseFindIfRevealed();
+      }
       return;
     }
     if (showFullscreenHeader.value) return;
@@ -277,10 +357,33 @@ export function useAppReaderChrome(deps: { readerRef: ReaderRef }) {
     }
   }
 
-  function onFullscreenHeaderMouseLeave() {
+  function onFullscreenHeaderMouseLeave(ev: MouseEvent) {
     if (!isFullscreenView.value) return;
-    showFullscreenHeader.value = false;
+    if (deps.fullscreenHeaderHighlightMenuOpen.value) return;
+    const rt = ev.relatedTarget;
+    if (rt instanceof Node && nodeIsUnderFullscreenHeaderFloat(rt)) return;
+    const { clientX, clientY } = ev;
+    requestAnimationFrame(() => {
+      if (!isFullscreenView.value || !showFullscreenHeader.value) return;
+      if (deps.fullscreenHeaderHighlightMenuOpen.value) return;
+      tryCollapseFullscreenHeaderFromPointer(clientX, clientY);
+    });
   }
+
+  watch(
+    () => deps.fullscreenHeaderHighlightMenuOpen.value,
+    (open, wasOpen) => {
+      if (wasOpen !== true || open !== false) return;
+      if (!isFullscreenView.value || !showFullscreenHeader.value) return;
+      requestAnimationFrame(() => {
+        if (deps.fullscreenHeaderHighlightMenuOpen.value) return;
+        tryCollapseFullscreenHeaderFromPointer(
+          lastFullscreenPointerClientX.value,
+          lastFullscreenPointerClientY.value,
+        );
+      });
+    },
+  );
 
   /** 全屏底缘感应：仅负责唤起。收起由底栏容器 @mouseleave 处理。 */
   function updateFullscreenFooterHover(ev: MouseEvent) {
@@ -314,11 +417,14 @@ export function useAppReaderChrome(deps: { readerRef: ReaderRef }) {
     if (
       showFullscreenSidebar.value &&
       sidebar &&
-      nodeIsUnderFullscreenPanel(sidebar, raw)
+      (nodeIsUnderFullscreenPanel(sidebar, raw) ||
+        nodeIsUnderFullscreenSidebarFloat(raw))
     ) {
       return;
     }
-    showFullscreenHeader.value = false;
+    if (showFullscreenHeader.value) {
+      collapseFullscreenHeaderAndCloseFindIfRevealed();
+    }
     showFullscreenFooter.value = false;
     showFullscreenSidebar.value = false;
   }
@@ -327,7 +433,9 @@ export function useAppReaderChrome(deps: { readerRef: ReaderRef }) {
   function dismissFullscreenChromeForNativeExit() {
     showFullscreenTip.value = false;
     fullscreenTipFading.value = false;
-    showFullscreenHeader.value = false;
+    if (showFullscreenHeader.value) {
+      collapseFullscreenHeaderAndCloseFindIfRevealed();
+    }
     showFullscreenFooter.value = false;
     showFullscreenSidebar.value = false;
     clearFullscreenTipTimers();
@@ -368,5 +476,6 @@ export function useAppReaderChrome(deps: { readerRef: ReaderRef }) {
     dismissFullscreenChromeForNativeExit,
     fullscreenCursorHidden,
     bumpFullscreenCursorIdle,
+    recordFullscreenPointer,
   };
 }
