@@ -148,7 +148,13 @@ function moveDown(index: number) {
 </script>
 
 <template>
-  <AppModal v-model="modelValue" title="章节匹配规则" max-width="850px">
+  <AppModal
+    v-model="modelValue"
+    title="章节匹配规则"
+    max-width="850px"
+    :mask-closable="false"
+    :esc-closable="true"
+  >
     <p class="desc">
       可启用多条规则，按顺序依次匹配；任一条匹配成功即视为章节标题。使用操作列的上移/下移调整优先级。内置规则不可删除，但可编辑。
     </p>

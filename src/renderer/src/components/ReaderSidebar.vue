@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import type { Chapter } from "../chapter";
 import { useReaderSidebarLists } from "../composables/useReaderSidebarLists";
+import type {
+  FileCategoryDefinition,
+  FileSortMode,
+} from "../constants/fileCategories";
+import type { TxtFileItem } from "../services/fileListService";
+import type { SidebarFileItem } from "../composables/useReaderSidebarLists";
+import type { CategoryEditorRow } from "../constants/fileCategories";
+import type { FileMetaRecord } from "../stores/fileMetaStore";
 import SwitchToggle from "./SwitchToggle.vue";
 import ChapterListPanel from "./ChapterListPanel.vue";
 import FileListPanel from "./FileListPanel.vue";
@@ -10,14 +18,11 @@ const props = withDefaults(
   defineProps<{
     activeTab: "files" | "chapters" | "bookmarks";
     chapters: Chapter[];
-    files: Array<{
-      name: string;
-      path: string;
-      size: number;
-      progress?: number;
-    }>;
+    files: TxtFileItem[];
     /** 来自 file.meta 的阅读进度映射（路径 key → 百分比） */
     metaProgressByPathKey?: Map<string, number>;
+    /** 与 `files` 对应的 meta 行（分类、打开时间、排序用进度等） */
+    fileMetaRecords?: readonly FileMetaRecord[];
     /** 当前打开文件的实时进度（%），滚动时更新 */
     liveReadingProgressPercent?: number;
     bookmarks: Array<{ line: number; note?: string; content: string }>;
@@ -38,6 +43,9 @@ const props = withDefaults(
     shouldCenterFileList?: boolean;
     /** App 在需将书签列表滚到当前书签并居中时置为 true（一拍后清除） */
     shouldCenterBookmarkList?: boolean;
+    fileCategory: string;
+    fileSort: FileSortMode;
+    fileCategoryCatalog: FileCategoryDefinition[];
   }>(),
   {
     inFullscreen: false,
@@ -46,6 +54,7 @@ const props = withDefaults(
     shouldCenterFileList: false,
     shouldCenterBookmarkList: false,
     metaProgressByPathKey: () => new Map(),
+    fileMetaRecords: () => [],
     liveReadingProgressPercent: undefined,
   },
 );
@@ -53,8 +62,11 @@ const props = withDefaults(
 const emit = defineEmits<{
   "update:activeTab": [value: "files" | "chapters" | "bookmarks"];
   "update:showChapterCounts": [value: boolean];
+  "update:fileCategory": [value: string];
+  "update:fileSort": [value: FileSortMode];
   pickDirectory: [];
-  openFile: [filePath: string];
+  importDroppedPaths: [paths: string[]];
+  openFile: [item: SidebarFileItem];
   jumpToChapter: [chapter: Chapter];
   jumpToBookmark: [line: number];
   clearFileList: [];
@@ -64,12 +76,22 @@ const emit = defineEmits<{
   removeBookmarks: [lines: number[]];
   editBookmark: [line: number];
   removeBookmark: [line: number];
+  persistUi: [];
+  applyCategoryCatalog: [
+    payload: {
+      initial: CategoryEditorRow[];
+      draft: CategoryEditorRow[];
+      catalog: FileCategoryDefinition[];
+    },
+  ];
+  setFilesCategory: [paths: string[], category: string];
 }>();
 
 const {
   chapterListRef,
   fileListRef,
   fileFilterQuery,
+  fileRowsEnriched,
   filesFiltered,
   chaptersVisible,
   bookmarkListRef,
@@ -151,16 +173,27 @@ defineExpose({
     />
     <FileListPanel
       v-show="activeTab === 'files'"
-      :files="files"
+      :files="fileRowsEnriched"
       :files-filtered="filesFiltered"
       :file-filter-query="fileFilterQuery"
       :current-file-path="currentFilePath"
       :meta-progress-map="metaProgressByPathKey"
       :live-reading-progress-percent="liveReadingProgressPercent"
+      :file-category="fileCategory"
+      :file-sort="fileSort"
+      :file-category-catalog="fileCategoryCatalog"
       @update-file-filter-query="fileFilterQuery = $event"
-      @open-file="emit('openFile', $event)"
+      @update:file-category="emit('update:fileCategory', $event)"
+      @update:file-sort="emit('update:fileSort', $event)"
+      @persist-ui="emit('persistUi')"
+      @apply-category-catalog="emit('applyCategoryCatalog', $event)"
+      @set-files-category="
+        (paths, category) => emit('setFilesCategory', paths, category)
+      "
+      @open-file="(item: SidebarFileItem) => emit('openFile', item)"
       @clear-file-list="emit('clearFileList')"
       @remove-file-list="emit('removeFileList', $event)"
+      @import-dropped-paths="emit('importDroppedPaths', $event)"
       @bind-list-ref="bindFileListRef"
     />
     <BookmarkListPanel

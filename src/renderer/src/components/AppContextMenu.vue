@@ -24,8 +24,10 @@ const menuRef = ref<HTMLElement | null>(null);
 const posX = ref(0);
 const posY = ref(0);
 
-function itemClassType(item: ContextMenuItem) {
-  return item.type ? `type-${item.type}` : "";
+function itemClass(item: ContextMenuItem) {
+  const c = ["appShellMenuItem"];
+  if (item.type) c.push(`appShellMenuItem--${item.type}`);
+  return c.join(" ");
 }
 
 function clampPosition() {
@@ -91,7 +93,7 @@ onBeforeUnmount(() => {
   <div
     v-if="open"
     ref="menuRef"
-    class="contextMenu"
+    class="contextMenu appShellMenuPanel"
     role="menu"
     :style="{
       left: `${posX}px`,
@@ -104,8 +106,7 @@ onBeforeUnmount(() => {
       v-for="item in items"
       :key="item.id"
       type="button"
-      class="contextMenuItem"
-      :class="itemClassType(item)"
+      :class="itemClass(item)"
       role="menuitem"
       @click="emit('select', item.id)"
     >
@@ -118,62 +119,5 @@ onBeforeUnmount(() => {
 .contextMenu {
   position: fixed;
   z-index: 7000;
-  padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
-}
-
-.contextMenuItem {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--list-item-fg);
-  text-align: left;
-  font-size: 13px;
-  line-height: 1.2;
-  padding: 8px 10px;
-  cursor: pointer;
-  transition: background-color 0.12s ease;
-}
-
-.contextMenuItem:hover {
-  background: var(--list-item-bg-hover);
-}
-
-.contextMenuItem.type-primary {
-  color: var(--primary);
-}
-
-.contextMenuItem.type-primary:hover {
-  background: var(--primary-bg);
-}
-
-.contextMenuItem.type-success {
-  color: var(--success);
-}
-
-.contextMenuItem.type-success:hover {
-  background: var(--success-bg);
-}
-
-.contextMenuItem.type-warning {
-  color: var(--warning);
-}
-
-.contextMenuItem.type-warning:hover {
-  background: var(--warning-bg);
-}
-
-.contextMenuItem.type-danger {
-  color: var(--danger);
-}
-
-.contextMenuItem.type-danger:hover {
-  background: var(--danger-bg);
 }
 </style>

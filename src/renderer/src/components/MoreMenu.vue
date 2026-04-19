@@ -173,53 +173,58 @@ onBeforeUnmount(() => {
       :aria-expanded="moreMenuOpen"
       @click.stop="toggleMoreMenu"
     />
-    <div v-if="moreMenuOpen" class="moreMenu" role="menu" @click.stop>
-      <button class="moreMenuItem" role="menuitem" @click="onToggleFind">
-        <span class="moreMenuIcon" v-html="icons.find"></span>
-        <span class="moreMenuLabel">查找</span>
-        <span class="moreMenuShortcut">{{ findShortcutLabel }}</span>
+    <div
+      v-if="moreMenuOpen"
+      class="moreMenuHost appShellMenuPanel"
+      role="menu"
+      @click.stop
+    >
+      <button class="appShellMenuItem" role="menuitem" @click="onToggleFind">
+        <span class="appShellMenuIconSlot" v-html="icons.find"></span>
+        <span class="appShellMenuLabel">查找</span>
+        <span class="appShellMenuShortcut">{{ findShortcutLabel }}</span>
       </button>
-      <div class="moreMenuDivider" role="separator"></div>
+      <div class="appShellMenuDivider" role="separator"></div>
       <div
-        class="moreMenuSubWrap"
+        class="appShellMenuSubWrap"
         @mouseenter="recentSubOpen = true"
         @mouseleave="recentSubOpen = false"
       >
         <button
           type="button"
-          class="moreMenuItem moreMenuItem--sub"
+          class="appShellMenuItem"
           role="menuitem"
           aria-haspopup="menu"
           :aria-expanded="recentSubOpen"
         >
-          <span class="moreMenuIcon" aria-hidden="true"></span>
-          <span class="moreMenuLabel">打开最近的文件</span>
-          <span class="moreMenuSubChevron">›</span>
+          <span class="appShellMenuIconSlot" aria-hidden="true"></span>
+          <span class="appShellMenuLabel">打开最近的文件</span>
+          <span class="appShellMenuSubChevron">›</span>
         </button>
         <div
           v-show="recentSubOpen"
-          class="moreMenuFlyout"
+          class="appShellMenuFlyout appShellMenuFlyout--left moreMenuRecentFlyout"
           role="menu"
           @click.stop
         >
           <template v-if="recentFiles.length">
-            <div class="moreMenuFlyoutList">
+            <div class="appShellMenuFlyoutList">
               <button
                 v-for="item in recentFiles"
                 :key="item.path"
                 type="button"
-                class="moreMenuFlyoutItem"
+                class="appShellMenuFlyoutItem appShellMenuFlyoutItem--rowBetween"
                 role="menuitem"
                 :title="item.path"
                 @click="onOpenRecentFile(item.path)"
               >
-                <span class="moreMenuFlyoutLabel">{{
+                <span class="appShellMenuFlyoutLabel">{{
                   formatRecentLabel(item.path)
                 }}</span>
                 <span
-                  class="moreMenuFlyoutMeta"
+                  class="appShellMenuFlyoutMeta"
                   :class="{
-                    'moreMenuFlyoutMeta--complete': isProgressComplete(
+                    'appShellMenuFlyoutMeta--complete': isProgressComplete(
                       item.progress,
                     ),
                   }"
@@ -228,66 +233,66 @@ onBeforeUnmount(() => {
               </button>
             </div>
             <div
-              class="moreMenuDivider moreMenuDivider--tight"
+              class="appShellMenuDivider moreMenuDividerTight"
               role="separator"
             ></div>
             <button
               type="button"
-              class="moreMenuFlyoutItem moreMenuFlyoutAction"
+              class="appShellMenuFlyoutItem appShellMenuFlyoutAction"
               role="menuitem"
               @click="onClearRecentFiles"
             >
-              <span class="moreMenuFlyoutLabel">清除最近打开的文件</span>
+              <span class="appShellMenuFlyoutLabel">清除最近打开的文件</span>
             </button>
           </template>
-          <div v-else class="moreMenuFlyoutEmpty">暂无记录</div>
+          <div v-else class="appShellMenuFlyoutEmpty">暂无记录</div>
         </div>
       </div>
-      <button class="moreMenuItem" role="menuitem" @click="onOpenNewWindow">
-        <span class="moreMenuIcon" v-html="icons.newWindow"></span>
-        <span class="moreMenuLabel">新窗口</span>
-        <span class="moreMenuShortcut">{{ newWindowShortcutLabel }}</span>
+      <button class="appShellMenuItem" role="menuitem" @click="onOpenNewWindow">
+        <span class="appShellMenuIconSlot" v-html="icons.newWindow"></span>
+        <span class="appShellMenuLabel">新窗口</span>
+        <span class="appShellMenuShortcut">{{ newWindowShortcutLabel }}</span>
       </button>
-      <div class="moreMenuDivider" role="separator"></div>
-      <button class="moreMenuItem" role="menuitem" @click="onOpenShortcuts">
-        <span class="moreMenuIcon" v-html="icons.shortcut"></span>
-        <span class="moreMenuLabel">快捷键</span>
+      <div class="appShellMenuDivider" role="separator"></div>
+      <button class="appShellMenuItem" role="menuitem" @click="onOpenShortcuts">
+        <span class="appShellMenuIconSlot" v-html="icons.shortcut"></span>
+        <span class="appShellMenuLabel">快捷键</span>
       </button>
-      <button class="moreMenuItem" role="menuitem" @click="onOpenSettings">
-        <span class="moreMenuIcon" v-html="icons.setting"></span>
-        <span class="moreMenuLabel">设置</span>
-        <span class="moreMenuShortcut">{{ settingsShortcutLabel }}</span>
+      <button class="appShellMenuItem" role="menuitem" @click="onOpenSettings">
+        <span class="appShellMenuIconSlot" v-html="icons.setting"></span>
+        <span class="appShellMenuLabel">设置</span>
+        <span class="appShellMenuShortcut">{{ settingsShortcutLabel }}</span>
       </button>
-      <button class="moreMenuItem" role="menuitem" @click="onOpenColorScheme">
+      <button class="appShellMenuItem" role="menuitem" @click="onOpenColorScheme">
         <span
-          class="moreMenuIcon moreMenuIcon--colorful"
+          class="appShellMenuIconSlot appShellMenuIconSlot--colorful"
           v-html="icons.palette"
         ></span>
-        <span class="moreMenuLabel">配色</span>
-        <span class="moreMenuShortcut">{{ colorSchemeShortcutLabel }}</span>
+        <span class="appShellMenuLabel">配色</span>
+        <span class="appShellMenuShortcut">{{ colorSchemeShortcutLabel }}</span>
       </button>
-      <button class="moreMenuItem" role="menuitem" @click="onCheckForUpdates">
-        <span class="moreMenuIcon" v-html="icons.update"></span>
-        <span class="moreMenuLabel">检查更新</span>
+      <button class="appShellMenuItem" role="menuitem" @click="onCheckForUpdates">
+        <span class="appShellMenuIconSlot" v-html="icons.update"></span>
+        <span class="appShellMenuLabel">检查更新</span>
       </button>
-      <button class="moreMenuItem" role="menuitem" @click="onToggleDevTools">
-        <span class="moreMenuIcon" v-html="icons.devTools"></span>
-        <span class="moreMenuLabel">开发者工具</span>
+      <button class="appShellMenuItem" role="menuitem" @click="onToggleDevTools">
+        <span class="appShellMenuIconSlot" v-html="icons.devTools"></span>
+        <span class="appShellMenuLabel">开发者工具</span>
       </button>
-      <button class="moreMenuItem" role="menuitem" @click="onOpenGithub">
+      <button class="appShellMenuItem" role="menuitem" @click="onOpenGithub">
         <span
-          class="moreMenuIcon moreMenuIcon--github"
+          class="appShellMenuIconSlot appShellMenuIconSlot--github"
           v-html="icons.github"
         ></span>
-        <span class="moreMenuLabel">GitHub</span>
+        <span class="appShellMenuLabel">GitHub</span>
       </button>
-      <button class="moreMenuItem" role="menuitem" @click="onOpenAbout">
-        <span class="moreMenuIcon" v-html="icons.info"></span>
-        <span class="moreMenuLabel">关于</span>
+      <button class="appShellMenuItem" role="menuitem" @click="onOpenAbout">
+        <span class="appShellMenuIconSlot" v-html="icons.info"></span>
+        <span class="appShellMenuLabel">关于</span>
       </button>
-      <button class="moreMenuItem" role="menuitem" @click="onQuit">
-        <span class="moreMenuIcon" v-html="icons.quit"></span>
-        <span class="moreMenuLabel">退出</span>
+      <button class="appShellMenuItem" role="menuitem" @click="onQuit">
+        <span class="appShellMenuIconSlot" v-html="icons.quit"></span>
+        <span class="appShellMenuLabel">退出</span>
       </button>
     </div>
   </div>
@@ -298,21 +303,16 @@ onBeforeUnmount(() => {
   position: relative;
 }
 
-.moreMenu {
+.moreMenuHost {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
   z-index: 5000;
   min-width: 200px;
-  padding: 6px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
 }
 
-.moreMenu::before,
-.moreMenu::after {
+.moreMenuHost::before,
+.moreMenuHost::after {
   content: "";
   position: absolute;
   width: 0;
@@ -320,7 +320,7 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-.moreMenu::before {
+.moreMenuHost::before {
   top: -8px;
   right: 6px;
   border-left: 8px solid transparent;
@@ -328,7 +328,7 @@ onBeforeUnmount(() => {
   border-bottom: 8px solid var(--border);
 }
 
-.moreMenu::after {
+.moreMenuHost::after {
   top: -7px;
   right: 7px;
   border-left: 7px solid transparent;
@@ -336,153 +336,11 @@ onBeforeUnmount(() => {
   border-bottom: 7px solid var(--bg);
 }
 
-.moreMenuItem {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--list-item-fg);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.moreMenuItem:hover {
-  background: var(--list-item-bg-hover);
-  color: var(--list-item-fg);
-}
-
-.moreMenuSubWrap {
-  position: relative;
-}
-
-.moreMenuSubChevron {
-  flex-shrink: 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1;
-}
-
-.moreMenuFlyout {
-  position: absolute;
-  top: -6px;
-  right: 100%;
+.moreMenuRecentFlyout {
   min-width: 260px;
-  max-height: 320px;
-  overflow: hidden;
-  padding: 6px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
-  display: flex;
-  flex-direction: column;
 }
 
-.moreMenuFlyoutList {
-  overflow: auto;
-  min-height: 0;
-}
-
-.moreMenuFlyoutItem {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--list-item-fg);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.moreMenuFlyoutItem:hover {
-  background: var(--list-item-bg-hover);
-}
-
-.moreMenuFlyoutAction {
-  flex-shrink: 0;
-}
-
-.moreMenuDivider--tight {
+.moreMenuDividerTight {
   margin: 6px 0;
-}
-
-.moreMenuFlyoutLabel {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
-.moreMenuFlyoutMeta {
-  flex-shrink: 0;
-  color: var(--warning);
-  font-size: 12px;
-}
-
-.moreMenuFlyoutMeta--complete {
-  color: var(--success);
-}
-
-.moreMenuFlyoutEmpty {
-  padding: 8px 10px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.moreMenuIcon {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--icon-btn-fg);
-}
-
-.moreMenuIcon :deep(svg) {
-  width: 16px;
-  height: 16px;
-  display: block;
-}
-
-.moreMenuIcon:not(.moreMenuIcon--github):not(.moreMenuIcon--colorful)
-  :deep(path) {
-  fill: currentColor;
-}
-
-.moreMenuIcon--github :deep(path) {
-  fill: var(--icon-btn-fg);
-}
-
-.moreMenuLabel {
-  flex: 1;
-  min-width: 0;
-}
-
-.moreMenuShortcut {
-  flex-shrink: 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1;
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    "Courier New", monospace;
-}
-
-.moreMenuDivider {
-  height: 1px;
-  margin: 6px 4px;
-  background: var(--border);
 }
 </style>

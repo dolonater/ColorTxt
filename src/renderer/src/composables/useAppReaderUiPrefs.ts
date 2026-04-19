@@ -9,6 +9,7 @@ import {
   normalizeLineHeightMultiple,
 } from "../constants/appUi";
 import type { useTxtStreamPipeline } from "./useTxtStreamPipeline";
+import type { TxtFileItem } from "../services/fileListService";
 
 type Stream = ReturnType<typeof useTxtStreamPipeline>;
 
@@ -30,6 +31,7 @@ export function useAppReaderUiPrefs(deps: {
       restorePhysicalLine?: number;
       skipRememberCurrent?: boolean;
       keepSidebarTab?: boolean;
+      listRow?: TxtFileItem;
     },
   ) => Promise<boolean>;
   isFullscreenView: Ref<boolean>;

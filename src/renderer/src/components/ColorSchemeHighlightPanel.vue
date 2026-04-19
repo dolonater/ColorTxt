@@ -36,7 +36,7 @@ async function onAddClick() {
 <template>
   <div class="colorSchemeHighlight" role="tabpanel">
     <div ref="tableScrollEl" class="schemePanelTableScroll">
-      <table class="highlightTable" :class="{ 'hasScrollBar': colors.length > 5 }">
+      <table class="highlightTable" :class="{ 'hasScrollBar': colors.length >= 6 }">
         <tbody>
           <tr v-for="(hex, rowIdx) in colors" :key="rowIdx">
             <td class="hlColLabel colorSchemeRowLabel">

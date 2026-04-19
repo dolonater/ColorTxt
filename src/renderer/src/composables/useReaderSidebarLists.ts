@@ -1,15 +1,41 @@
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, shallowRef, watch } from "vue";
 import type { Chapter } from "../chapter";
 import type VirtualList from "../components/VirtualList.vue";
+import type { FileSortMode } from "../constants/fileCategories";
+import {
+  FILE_CATEGORY_FILTER_ALL,
+  FILE_CATEGORY_FILTER_UNCATEGORIZED,
+} from "../constants/fileCategories";
+import type { TxtFileItem } from "../services/fileListService";
+import { fileHistoryKey } from "../stores/recentHistoryStore";
+import {
+  normalizeFileMetaPathKey,
+  type FileMetaRecord,
+} from "../stores/fileMetaStore";
+
+const EMPTY_META_PROGRESS = new Map<string, number>();
 
 /** 行高 + 1px 行间距（用于虚拟列表内的 padding-bottom） */
 export const READER_SIDEBAR_ROW_STRIDE = 41;
 
-type SidebarFileItem = {
+export type SidebarFileItem = {
   name: string;
   path: string;
   size: number;
+  /**
+   * 阅读进度（%）；`undefined` 表示尚未在 meta 中有记录（从未打开过），
+   * 与 `0`（已打开且进度为 0%）不同；排序时会将无记录项固定排在最后。
+   * 列表行展示用 `metaProgressMap` + 实时进度；`fileRowsEnriched` 故意不写本字段，避免滚动时整表重算。
+   */
   progress?: number;
+  /**
+   * 来自 file.meta 的 `lastOpenedAt`（ms）：仅在应用内打开该文件时更新；
+   * 无记录时为 `undefined`；按打开时间升序时，有阅读进度但无本字段的项视为更早打开，排在最前。
+   */
+  lastReadAt?: number;
+  /** 来自侧栏文件列表项；空或未设为未分类 */
+  category?: string;
+  addedAt?: number;
 };
 
 type SidebarBookmarkItem = {
@@ -21,7 +47,8 @@ type SidebarBookmarkItem = {
 export type ReaderSidebarListProps = Readonly<{
   activeTab: "files" | "chapters" | "bookmarks";
   chapters: Chapter[];
-  files: Array<SidebarFileItem>;
+  /** 原始文件列表（与 `App` 中 `txtFiles` 同源）；项上可带 `category`；进度等与 `metaProgressByPathKey` / `fileMetaRecords` 合并 */
+  files: TxtFileItem[];
   bookmarks: SidebarBookmarkItem[];
   currentFilePath: string | null;
   activeChapterIdx: number;
@@ -32,7 +59,141 @@ export type ReaderSidebarListProps = Readonly<{
   shouldCenterFileList?: boolean;
   shouldCenterBookmarkList?: boolean;
   activeScrollMode?: "edge" | "center";
+  /** 来自持久化的阅读进度映射（路径 key → %） */
+  metaProgressByPathKey?: Map<string, number>;
+  /** 与 `files` 对应的 file.meta 行；用于分类、打开时间、排序用进度等 */
+  fileMetaRecords?: readonly FileMetaRecord[];
+  /** 文件列表分类筛选 */
+  fileCategory?: string;
+  /** 文件列表排序 */
+  fileSort?: FileSortMode;
+  /** 当前打开文件的实时进度（%）；仅「按阅读进度」排序时参与 `filesSorted`（勿用于打开时间排序，以免滚动时整表重算） */
+  liveReadingProgressPercent?: number;
 }>;
+
+function effectiveCategoryName(f: SidebarFileItem): string {
+  const c = f.category?.trim() ?? "";
+  return c;
+}
+
+function comparePathKey(a: string, b: string): number {
+  return normalizeFileMetaPathKey(a).localeCompare(normalizeFileMetaPathKey(b));
+}
+
+/** 已有阅读进度记录（含 0%）；无记录的文件不参与按百分比比较，固定排末尾 */
+function hasRecordedReadingProgress(f: SidebarFileItem): boolean {
+  return typeof f.progress === "number" && Number.isFinite(f.progress);
+}
+
+function hasLastReadAt(f: SidebarFileItem): boolean {
+  return typeof f.lastReadAt === "number" && Number.isFinite(f.lastReadAt);
+}
+
+function effectiveFileSizeBytes(f: SidebarFileItem): number {
+  const s = f.size;
+  return typeof s === "number" && Number.isFinite(s) ? s : 0;
+}
+
+/**
+ * 打开时间升序：0 有进度无时间（旧数据，视为最早）；1 有时间戳；2 无进度。
+ */
+function readingTimeSortOrderAsc(f: SidebarFileItem): 0 | 1 | 2 {
+  if (hasLastReadAt(f)) return 1;
+  if (hasRecordedReadingProgress(f)) return 0;
+  return 2;
+}
+
+/**
+ * 打开时间降序：0 有时间戳；1 有进度无时间；2 无进度（组间顺序与升序对称）。
+ */
+function readingTimeSortOrderDesc(f: SidebarFileItem): 0 | 1 | 2 {
+  if (hasLastReadAt(f)) return 0;
+  if (hasRecordedReadingProgress(f)) return 1;
+  return 2;
+}
+
+function sortFileList(
+  list: SidebarFileItem[],
+  mode: FileSortMode,
+): SidebarFileItem[] {
+  const out = list.slice();
+  const byName = (a: SidebarFileItem, b: SidebarFileItem) =>
+    a.name.localeCompare(b.name, "zh-Hans-CN");
+  switch (mode) {
+    case "nameAsc":
+      return out.sort(byName);
+    case "nameDesc":
+      return out.sort((a, b) => byName(b, a));
+    case "pathAsc":
+      return out.sort((a, b) => comparePathKey(a.path, b.path));
+    case "pathDesc":
+      return out.sort((a, b) => comparePathKey(b.path, a.path));
+    case "sizeAsc":
+      return out.sort(
+        (a, b) =>
+          effectiveFileSizeBytes(a) - effectiveFileSizeBytes(b) ||
+          byName(a, b),
+      );
+    case "sizeDesc":
+      return out.sort(
+        (a, b) =>
+          effectiveFileSizeBytes(b) - effectiveFileSizeBytes(a) ||
+          byName(a, b),
+      );
+    case "progressAsc":
+      return out.sort((a, b) => {
+        const aRec = hasRecordedReadingProgress(a);
+        const bRec = hasRecordedReadingProgress(b);
+        if (!aRec && !bRec) return byName(a, b);
+        if (!aRec) return 1;
+        if (!bRec) return -1;
+        const cmp = a.progress! - b.progress!;
+        return cmp || byName(a, b);
+      });
+    case "progressDesc":
+      return out.sort((a, b) => {
+        const aRec = hasRecordedReadingProgress(a);
+        const bRec = hasRecordedReadingProgress(b);
+        if (!aRec && !bRec) return byName(a, b);
+        if (!aRec) return 1;
+        if (!bRec) return -1;
+        const cmp = b.progress! - a.progress!;
+        return cmp || byName(a, b);
+      });
+    case "lastReadAtAsc":
+      return out.sort((a, b) => {
+        const ta = readingTimeSortOrderAsc(a);
+        const tb = readingTimeSortOrderAsc(b);
+        if (ta !== tb) return ta - tb;
+        if (ta === 1) {
+          const cmp = a.lastReadAt! - b.lastReadAt!;
+          return cmp || byName(a, b);
+        }
+        return byName(a, b);
+      });
+    case "lastReadAtDesc":
+      return out.sort((a, b) => {
+        const ta = readingTimeSortOrderDesc(a);
+        const tb = readingTimeSortOrderDesc(b);
+        if (ta !== tb) return ta - tb;
+        if (ta === 0) {
+          const cmp = b.lastReadAt! - a.lastReadAt!;
+          return cmp || byName(a, b);
+        }
+        return byName(a, b);
+      });
+    case "addedAtAsc":
+      return out.sort(
+        (a, b) => (a.addedAt ?? 0) - (b.addedAt ?? 0) || byName(a, b),
+      );
+    case "addedAtDesc":
+      return out.sort(
+        (a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0) || byName(a, b),
+      );
+    default:
+      return out.sort(byName);
+  }
+}
 
 export function useReaderSidebarLists(
   props: ReaderSidebarListProps,
@@ -44,18 +205,101 @@ export function useReaderSidebarLists(
 
   const fileFilterQuery = ref("");
 
-  const filesFiltered = computed<SidebarFileItem[]>(() => {
-    const q = fileFilterQuery.value.trim().toLowerCase();
-    if (!q) return props.files;
-    return props.files.filter((f) => f.name.toLowerCase().includes(q));
-  });
+  /**
+   * 当前排序为「打开时间」（升或降）时从 meta 拍快照；排序只用快照，
+   * 打开文件时更新 `lastOpenedAt` 不会改列表顺序；每次选「打开时间」会重拍（含升/降互切）。
+   */
+  const openedAtSortSnapshot = shallowRef(new Map<string, number>());
+
+  function refreshOpenedAtSortSnapshotFromMeta() {
+    const m = new Map<string, number>();
+    for (const r of props.fileMetaRecords ?? []) {
+      if (
+        typeof r.lastOpenedAt === "number" &&
+        Number.isFinite(r.lastOpenedAt)
+      ) {
+        m.set(fileHistoryKey(r.path), r.lastOpenedAt);
+      }
+    }
+    openedAtSortSnapshot.value = m;
+  }
 
   watch(
-    () => props.files,
-    () => {
-      fileFilterQuery.value = "";
+    () => props.fileSort ?? "nameAsc",
+    (mode) => {
+      if (mode === "lastReadAtAsc" || mode === "lastReadAtDesc") {
+        refreshOpenedAtSortSnapshotFromMeta();
+      }
     },
+    { immediate: true },
   );
+
+  /**
+   * 分类来自列表项 `TxtFileItem.category`；（按需）合并打开时间快照。
+   * **不**合并 `metaProgressByPathKey` / 实时进度，避免滚动时整表 `.map` 与下游 watcher 连锁。
+   */
+  const fileRowsEnriched = computed((): SidebarFileItem[] => {
+    const list = props.files;
+    const sortMode = props.fileSort ?? "nameAsc";
+    const needLastRead =
+      sortMode === "lastReadAtAsc" || sortMode === "lastReadAtDesc";
+    return list.map((f) => {
+      const key = fileHistoryKey(f.path);
+      const row: SidebarFileItem = {
+        ...f,
+        category: (f.category ?? "").trim(),
+      };
+      if (needLastRead) {
+        row.lastReadAt = openedAtSortSnapshot.value.get(key);
+      }
+      return row;
+    });
+  });
+
+  const filesByCategory = computed(() => {
+    const list = fileRowsEnriched.value;
+    const filter = props.fileCategory ?? FILE_CATEGORY_FILTER_ALL;
+    if (filter === FILE_CATEGORY_FILTER_ALL) return list;
+    if (filter === FILE_CATEGORY_FILTER_UNCATEGORIZED) {
+      return list.filter((f) => !effectiveCategoryName(f));
+    }
+    return list.filter((f) => effectiveCategoryName(f) === filter);
+  });
+
+  const filesSorted = computed(() => {
+    const mode = props.fileSort ?? "nameAsc";
+    const base = filesByCategory.value;
+    const needsArchivedProgressOnly =
+      mode === "lastReadAtAsc" || mode === "lastReadAtDesc";
+    if (needsArchivedProgressOnly) {
+      const map = props.metaProgressByPathKey ?? EMPTY_META_PROGRESS;
+      const merged = base.map((f) => ({
+        ...f,
+        progress: map.get(fileHistoryKey(f.path)),
+      }));
+      return sortFileList(merged, mode);
+    }
+    if (mode !== "progressAsc" && mode !== "progressDesc") {
+      return sortFileList(base, mode);
+    }
+    const map = props.metaProgressByPathKey ?? EMPTY_META_PROGRESS;
+    const cur = props.currentFilePath;
+    const live = props.liveReadingProgressPercent;
+    const merged = base.map((f) => {
+      const key = fileHistoryKey(f.path);
+      const p =
+        cur === f.path && typeof live === "number" ? live : map.get(key);
+      return { ...f, progress: p };
+    });
+    return sortFileList(merged, mode);
+  });
+
+  const filesFiltered = computed<SidebarFileItem[]>(() => {
+    const q = fileFilterQuery.value.trim().toLowerCase();
+    const base = filesSorted.value;
+    if (!q) return base;
+    return base.filter((f) => f.name.toLowerCase().includes(q));
+  });
 
   const chaptersVisible = computed(() =>
     props.chapters.filter((ch) => ch.charCount > 0),
@@ -96,7 +340,9 @@ export function useReaderSidebarLists(
       : override?.smooth !== undefined
         ? override.smooth
         : props.chapterListScrollSmooth;
-    const align = override?.align ?? (props.activeScrollMode === "center" ? "center" : "auto");
+    const align =
+      override?.align ??
+      (props.activeScrollMode === "center" ? "center" : "auto");
     const allowWhenHidden = override?.allowWhenHidden === true;
 
     await nextTick();
@@ -119,18 +365,22 @@ export function useReaderSidebarLists(
       (!allowWhenHidden && props.activeTab !== "chapters")
     ) {
       if (layoutRetry < MAX_CHAPTER_LIST_LAYOUT_RETRIES) {
-        requestAnimationFrame(() =>
-          void ensureActiveChapterVisible(
-            { smooth: wantSmoothScroll, allowWhenHidden },
-            layoutRetry + 1,
-          ),
+        requestAnimationFrame(
+          () =>
+            void ensureActiveChapterVisible(
+              { smooth: wantSmoothScroll, allowWhenHidden },
+              layoutRetry + 1,
+            ),
         );
       }
       return;
     }
 
     const behavior = wantSmoothScroll ? "smooth" : "auto";
-    vl.scrollToIndex(idx, { align: align === "center" ? "center" : "auto", behavior });
+    vl.scrollToIndex(idx, {
+      align: align === "center" ? "center" : "auto",
+      behavior,
+    });
   }
 
   async function ensureCurrentFileVisible(mode: "edge" | "center" = "edge") {
@@ -157,7 +407,9 @@ export function useReaderSidebarLists(
     await nextTick();
     const activeLine = props.activeBookmarkLine ?? -1;
     if (activeLine < 0) return;
-    const idx = bookmarksVisible.value.findIndex((it) => it.line === activeLine);
+    const idx = bookmarksVisible.value.findIndex(
+      (it) => it.line === activeLine,
+    );
     if (idx < 0) return;
     const vl = bookmarkListRef.value;
     if (!vl) return;
@@ -249,6 +501,22 @@ export function useReaderSidebarLists(
     });
   });
 
+  watch(
+    () => [props.fileCategory, props.fileSort] as const,
+    () => {
+      if (props.activeTab !== "files") return;
+      void nextTick(() => {
+        const path = props.currentFilePath;
+        if (!path) return;
+        if (filesFiltered.value.some((f) => f.path === path)) {
+          void ensureCurrentFileVisible(
+            props.activeScrollMode === "center" ? "center" : "edge",
+          );
+        }
+      });
+    },
+  );
+
   async function scrollFileListToIndex(index: number) {
     await nextTick();
     const vl = fileListRef.value;
@@ -265,12 +533,15 @@ export function useReaderSidebarLists(
     fileListRef,
     bookmarkListRef,
     fileFilterQuery,
+    /** 含 meta 分类/进度等，供分类菜单计数与「共 n 个文件」等（与原始 `files` 条数一致） */
+    fileRowsEnriched,
     filesFiltered,
     chaptersVisible,
     bookmarksVisible,
     sidebarActiveLineNumber,
     onChapterItemClick,
     ensureActiveBookmarkVisible,
+    ensureCurrentFileVisible,
     scrollFileListToIndex,
   };
 }

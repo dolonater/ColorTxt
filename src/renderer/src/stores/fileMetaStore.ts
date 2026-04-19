@@ -32,6 +32,11 @@ export type FileMetaRecord = {
   bookmarks: FileBookmarkItem[];
   /** 按高亮色索引分组的关键词；索引越界时阅读器忽略该桶 */
   highlightWordsByIndex?: HighlightWordsByIndex;
+  /**
+   * 应用内最后一次打开该文件（阅读器开始加载该会话路径）的时间戳（ms）。
+   * 与 `updatedAt` 分离：改分类等操作也会刷新 `updatedAt`，但不应影响「打开时间」排序。
+   */
+  lastOpenedAt?: number;
   updatedAt: number;
 };
 
@@ -151,6 +156,10 @@ function normalizeRecord(item: Partial<FileMetaRecord>): FileMetaRecord | null {
     Number.isFinite(item.sourceMtimeMsAtConvert)
       ? item.sourceMtimeMsAtConvert
       : undefined;
+  const lastOpenedAt =
+    typeof item.lastOpenedAt === "number" && Number.isFinite(item.lastOpenedAt)
+      ? Math.floor(item.lastOpenedAt)
+      : undefined;
   const updatedAt =
     typeof item.updatedAt === "number" && Number.isFinite(item.updatedAt)
       ? Math.floor(item.updatedAt)
@@ -165,6 +174,7 @@ function normalizeRecord(item: Partial<FileMetaRecord>): FileMetaRecord | null {
     viewportTopPhysicalLine,
     bookmarks,
     highlightWordsByIndex,
+    lastOpenedAt,
     updatedAt,
   };
 }
@@ -208,6 +218,35 @@ export function findFileMetaRecord(items: FileMetaRecord[], path: string) {
   return items.find((it) => it.fileName === nameKey);
 }
 
+/** 与 `findFileMetaRecord` 规则一致；构建一次 O(M)，按路径查询 O(1)，避免侧栏对每条列表项线性扫 meta */
+export type FileMetaRecordLookup = {
+  byNormPath: Map<string, FileMetaRecord>;
+  byFileName: Map<string, FileMetaRecord>;
+};
+
+export function buildFileMetaRecordLookup(
+  items: FileMetaRecord[],
+): FileMetaRecordLookup {
+  const byNormPath = new Map<string, FileMetaRecord>();
+  const byFileName = new Map<string, FileMetaRecord>();
+  for (const r of items) {
+    byNormPath.set(normalizeFileMetaPathKey(r.path), r);
+    const fk = (r.fileName || "").trim().toLowerCase();
+    if (fk) byFileName.set(fk, r);
+  }
+  return { byNormPath, byFileName };
+}
+
+export function lookupFileMetaRecord(
+  lu: FileMetaRecordLookup,
+  path: string,
+): FileMetaRecord | undefined {
+  const fullKey = normalizeFileMetaPathKey(path);
+  const exact = lu.byNormPath.get(fullKey);
+  if (exact) return exact;
+  return lu.byFileName.get(fileNameKey(path));
+}
+
 export function upsertFileMetaRecord(
   items: FileMetaRecord[],
   path: string,
@@ -224,6 +263,7 @@ export function upsertFileMetaRecord(
     highlightWordsByIndex: prev?.highlightWordsByIndex,
     convertedTxtPath: prev?.convertedTxtPath,
     sourceMtimeMsAtConvert: prev?.sourceMtimeMsAtConvert,
+    lastOpenedAt: prev?.lastOpenedAt,
     ...nextPartial,
     path,
     fileName: fileNameKey(path),

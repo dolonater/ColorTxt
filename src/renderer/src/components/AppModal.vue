@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, useId, useSlots, watch } from "vue";
+import { computed, onBeforeUnmount, ref, useId, useSlots, watch } from "vue";
+import { icons } from "../icons";
 import { registerModal } from "../utils/modalStack";
 
 const props = withDefaults(
@@ -8,6 +9,11 @@ const props = withDefaults(
     title?: string;
     maskClosable?: boolean;
     escClosable?: boolean;
+    /**
+     * 右上角关闭：默认同 `(maskClosable || escClosable)`（不可蒙层且不可 Esc 的弹框不显示）。
+     * 设为 `false` 可强制隐藏。
+     */
+    showCloseButton?: boolean;
     /** 内容区面板最大宽度，如 520px、800px */
     maxWidth?: string;
     bodyScroll?: boolean;
@@ -17,10 +23,17 @@ const props = withDefaults(
     title: "",
     maskClosable: true,
     escClosable: true,
+    showCloseButton: true,
     maxWidth: "520px",
     bodyScroll: true,
     panelClass: "",
   },
+);
+
+const showCloseChrome = computed(
+  () =>
+    props.showCloseButton !== false &&
+    (props.maskClosable || props.escClosable),
 );
 
 const modelValue = defineModel<boolean>({ default: false });
@@ -72,6 +85,7 @@ onBeforeUnmount(() => {
       role="dialog"
       aria-modal="true"
       :aria-labelledby="title ? titleId : undefined"
+      :aria-label="title ? undefined : '对话框'"
       @click.self="onMaskClick"
       @drop.stop.prevent
     >
@@ -81,7 +95,30 @@ onBeforeUnmount(() => {
         :class="panelClass"
         @click.stop
       >
-        <h2 v-if="title" :id="titleId" class="appModalTitle">{{ title }}</h2>
+        <div
+          v-if="title || showCloseChrome"
+          class="appModalPanelHeader"
+          :class="{
+            'appModalPanelHeader--noTitle': !title,
+            'appModalPanelHeader--noClose': !showCloseChrome,
+          }"
+        >
+          <h2 v-if="title" :id="titleId" class="appModalTitle">{{ title }}</h2>
+          <button
+            v-if="showCloseChrome"
+            type="button"
+            class="appModalClose"
+            aria-label="关闭"
+            title="关闭"
+            @click="close"
+          >
+            <span
+              class="appModalCloseIcon"
+              aria-hidden="true"
+              v-html="icons.close"
+            />
+          </button>
+        </div>
         <div
           class="appModalBody"
           :class="{ 'appModalBody--noScroll': !bodyScroll }"
@@ -137,6 +174,7 @@ onBeforeUnmount(() => {
 
 .appModalPanel {
   width: 100%;
+  position: relative;
   display: flex;
   flex-direction: column;
   max-height: min(90vh, 720px);
@@ -147,12 +185,71 @@ onBeforeUnmount(() => {
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
 }
 
+.appModalPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+  min-width: 0;
+}
+
+.appModalPanelHeader--noTitle {
+  justify-content: flex-end;
+  margin-bottom: 0;
+}
+
+.appModalPanelHeader--noClose {
+  justify-content: flex-start;
+}
+
 .appModalTitle {
-  margin: 0 0 8px;
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 18px;
   font-weight: 600;
   color: var(--fg);
+}
+
+.appModalClose {
   flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--icon-btn-fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.appModalClose:hover {
+  color: var(--accent);
+}
+
+.appModalCloseIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.appModalCloseIcon :deep(svg) {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+.appModalCloseIcon :deep(path) {
+  fill: currentColor;
 }
 
 .appModalBody {

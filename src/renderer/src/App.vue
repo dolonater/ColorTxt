@@ -6,6 +6,7 @@ import AppHeader, { type RecentFileItem } from "./components/AppHeader.vue";
 import ReaderSidebar from "./components/ReaderSidebar.vue";
 import AppFooter from "./components/AppFooter.vue";
 import ReaderMain from "./components/ReaderMain.vue";
+import AppAlertHost from "./components/AppAlertHost.vue";
 import AppOverlays from "./components/AppOverlays.vue";
 import type { SettingsApplyPayload } from "./components/SettingsPanel.vue";
 import { bookmarkNoteInputRefKey } from "./injectionKeys";
@@ -37,6 +38,7 @@ import {
   defaultMonacoAdvancedWrapping,
   defaultMonacoCustomHighlight,
   defaultReaderIdleHint,
+  defaultReaderOpenHint,
   defaultReaderFontSize,
   defaultReaderLineHeightMultiple,
   defaultReaderPaletteDark,
@@ -74,7 +76,21 @@ import {
   createDefaultShortcutBindings,
   type ShortcutBindingMap,
 } from "./services/shortcutRegistry";
+import { appAlert } from "./services/appAlert";
 import { mergeShortcutBindings } from "./services/shortcutUtils";
+import {
+  syncTxtFilesCategoriesAfterCatalogEdit,
+  type TxtFileItem,
+} from "./services/fileListService";
+import {
+  cloneDefaultFileCategoryCatalog,
+  DEFAULT_FILE_SORT,
+  FILE_CATEGORY_FILTER_ALL,
+  FILE_CATEGORY_FILTER_UNCATEGORIZED,
+  type CategoryEditorRow,
+  type FileCategoryDefinition,
+  type FileSortMode,
+} from "./constants/fileCategories";
 
 const readerRef = ref<InstanceType<typeof ReaderMain> | null>(null);
 const chrome = useAppReaderChrome({ readerRef });
@@ -151,6 +167,8 @@ const loadingProgressPercent = ref<number | null>(null);
 /** 递归扫描目录中的 .txt 时：蒙版 + 当前处理的相对路径 */
 const dirListScanning = ref(false);
 const dirListCurrentName = ref("");
+/** 拖入阅读区时显示局部「打开文件」蒙层（由 useAppWindowBindings 驱动） */
+const readerDropOverlayVisible = ref(false);
 const fileEncoding = ref<string>("-");
 const currentFileSize = ref<number | null>(null);
 const totalCharCount = ref(0);
@@ -160,7 +178,12 @@ const chapters = ref<Chapter[]>([]);
 const activeChapterIdx = ref<number>(-1);
 const showChapterCounts = ref(defaultShowChapterCounts);
 const sidebarTab = ref<"files" | "chapters" | "bookmarks">("files");
-const txtFiles = ref<Array<{ name: string; path: string; size: number }>>([]);
+const txtFiles = ref<TxtFileItem[]>([]);
+const fileCategory = ref<string>(FILE_CATEGORY_FILTER_ALL);
+const fileSort = ref<FileSortMode>(DEFAULT_FILE_SORT);
+const fileCategoryCatalog = ref<FileCategoryDefinition[]>(
+  cloneDefaultFileCategoryCatalog(),
+);
 const fileMetaRecords = ref<FileMetaRecord[]>([]);
 const showSidebar = ref(defaultShowSidebar);
 const readerSidebarRef = ref<InstanceType<typeof ReaderSidebar> | null>(null);
@@ -384,6 +407,9 @@ const persistence = useAppPersistence({
   highlightColorsLight,
   highlightColorsDark,
   ebookConvertOutputDir,
+  fileCategory,
+  fileSort,
+  fileCategoryCatalog,
 });
 const {
   persistSettings,
@@ -430,6 +456,58 @@ const liveReadingProgressForUi = computed<number | undefined>(() => {
   const v = readingProgressParts.value.percentValue;
   return typeof v === "number" ? v : undefined;
 });
+
+function onPersistUi() {
+  persistSettings();
+}
+
+function onSetFilesCategory(paths: string[], category: string) {
+  const set = new Set(paths);
+  const cat = category.trim() ? category.trim() : undefined;
+  txtFiles.value = txtFiles.value.map((f) => {
+    if (!set.has(f.path)) return f;
+    if (cat) return { ...f, category: cat };
+    const { category: _drop, ...rest } = f;
+    return rest as TxtFileItem;
+  });
+  persistFileListCache();
+}
+
+/** 侧栏筛选为具体分类时，新加入列表的文件自动归入该分类 */
+function applyCurrentFileCategoryToNewPaths(paths: string[]) {
+  const fc = fileCategory.value;
+  if (
+    fc === FILE_CATEGORY_FILTER_ALL ||
+    fc === FILE_CATEGORY_FILTER_UNCATEGORIZED ||
+    paths.length === 0
+  ) {
+    return;
+  }
+  onSetFilesCategory(paths, fc);
+}
+
+function onApplyCategoryCatalog(payload: {
+  initial: CategoryEditorRow[];
+  draft: CategoryEditorRow[];
+  catalog: FileCategoryDefinition[];
+}) {
+  txtFiles.value = syncTxtFilesCategoriesAfterCatalogEdit(
+    txtFiles.value,
+    payload.initial,
+    payload.draft,
+  );
+  fileCategoryCatalog.value = payload.catalog.map((c) => ({ ...c }));
+  const fc = fileCategory.value;
+  if (
+    fc !== FILE_CATEGORY_FILTER_ALL &&
+    fc !== FILE_CATEGORY_FILTER_UNCATEGORIZED &&
+    !payload.catalog.some((c) => c.name === fc)
+  ) {
+    fileCategory.value = FILE_CATEGORY_FILTER_ALL;
+  }
+  persistFileListCache();
+  persistSettings();
+}
 
 /** 顶栏「更多」里最近文件：仅路径来自 recent，进度来自 meta（当前书用 live） */
 const recentFilesForMenu = computed<RecentFileItem[]>(() => {
@@ -528,6 +606,7 @@ const fileSession = useAppFileSession({
   ebookConvertOutputDir,
   ebookParsing,
   ebookConversionSourcePath,
+  applyCurrentFileCategoryIfConcrete: applyCurrentFileCategoryToNewPaths,
 });
 
 const {
@@ -537,9 +616,15 @@ const {
   openFileViaDialog,
   openFileFromSidebar,
   pickTxtDirectory,
+  importPathsIntoFileList,
   openFilePath,
   openRecentFileFromHistory,
 } = fileSession;
+
+async function onImportDroppedPathsFromList(paths: string[]) {
+  readerDropOverlayVisible.value = false;
+  await importPathsIntoFileList(paths);
+}
 
 const footerPathCaption = computed(() => {
   if (ebookParsing.value && ebookConversionSourcePath.value) {
@@ -638,7 +723,7 @@ async function applyShortcutBindings(next: ShortcutBindingMap) {
     merged.toggleAllWindowsVisibility,
   );
   if (!globalResult.ok) {
-    window.alert(globalResult.message || "系统级快捷键设置失败");
+    await appAlert(globalResult.message || "系统级快捷键设置失败");
     return;
   }
   shortcutBindings.value = merged;
@@ -855,6 +940,7 @@ useAppWindowBindings({
   activeStreamRequestId,
   activeStreamFilePath,
   readingProgressSynced,
+  readerDropOverlayVisible,
 });
 
 useAppShellThemeWatch({
@@ -976,6 +1062,10 @@ useAppShellThemeWatch({
           v-model:activeTab="sidebarTab"
           v-model:showChapterCounts="showChapterCounts"
           :files="txtFiles"
+          :file-meta-records="fileMetaRecords"
+          :file-category="fileCategory"
+          :file-sort="fileSort"
+          :file-category-catalog="fileCategoryCatalog"
           :meta-progress-by-path-key="metaProgressByPathKey"
           :live-reading-progress-percent="liveReadingProgressForUi"
           :bookmarks="bookmarkListItems"
@@ -985,6 +1075,7 @@ useAppShellThemeWatch({
           :active-chapter-idx="activeChapterIdx"
           :format-char-count="formatCharCount"
           @pick-directory="pickTxtDirectory"
+          @import-dropped-paths="onImportDroppedPathsFromList"
           @open-file="openFileFromSidebar"
           @jump-to-chapter="jumpToChapter"
           @clear-file-list="clearFileList"
@@ -995,6 +1086,11 @@ useAppShellThemeWatch({
           @remove-bookmarks="removeCurrentFileBookmarks"
           @edit-bookmark="onEditBookmark"
           @remove-bookmark="onRemoveBookmark"
+          @persist-ui="onPersistUi"
+          @update:file-category="fileCategory = $event"
+          @update:file-sort="fileSort = $event"
+          @apply-category-catalog="onApplyCategoryCatalog"
+          @set-files-category="onSetFilesCategory"
         />
         <!-- 放在侧栏容器内，避免移到拖条时触发 @mouseleave 导致全屏侧栏收起 -->
         <div
@@ -1012,8 +1108,18 @@ useAppShellThemeWatch({
       <div
         ref="readerPaneWrapRef"
         class="readerPaneWrap"
+        data-drop-zone="reader"
         :style="fullscreenReaderPaneStyle"
       >
+        <Transition name="readerDropOverlay">
+          <div
+            v-if="readerDropOverlayVisible"
+            class="readerDropOverlay"
+            aria-hidden="true"
+          >
+            <p class="readerDropOverlayText">打开文件</p>
+          </div>
+        </Transition>
         <ReaderMain
           ref="readerRef"
           class="readerPane"
@@ -1045,7 +1151,8 @@ useAppShellThemeWatch({
           class="readerIdleHint"
           aria-hidden="true"
         >
-          {{ defaultReaderIdleHint }}
+          <div>{{ defaultReaderIdleHint }}</div>
+          <p>{{ defaultReaderOpenHint }}</p>
         </div>
         <div
           v-if="showReaderBusyHint"
@@ -1093,6 +1200,8 @@ useAppShellThemeWatch({
         @reveal-file-in-folder="revealCurrentFileInFolder"
       />
     </div>
+
+    <AppAlertHost />
 
     <AppOverlays
       ref="appOverlaysRef"

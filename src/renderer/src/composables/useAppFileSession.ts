@@ -2,14 +2,18 @@ import { nextTick, type Ref } from "vue";
 import type ReaderMain from "../components/ReaderMain.vue";
 import ReaderSidebar from "../components/ReaderSidebar.vue";
 import {
+  basenameFromPath,
   normalizeTxtFileItem,
   readTxtDirectoryFromDialog,
   mergeTxtFileLists,
+  type TxtFileItem,
 } from "../services/fileListService";
+import { appAlert } from "../services/appAlert";
 import { prepareOpenFile } from "../services/fileOpenService";
 import { loadSessionSnapshot } from "../stores/cacheStore";
 import { useAppPersistence } from "./useAppPersistence";
-import { isEbookFilePath } from "../ebook/ebookFormat";
+import { normalizeFileMetaPathKey } from "../stores/fileMetaStore";
+import { isEbookFilePath, isSupportedBookPath } from "../ebook/ebookFormat";
 import { ensureEbookColorTxt } from "../ebook/convertEbookToColorTxt";
 import { yieldToUi } from "../ebook/yieldToUi";
 import { useAppChapterListSync } from "./useAppChapterListSync";
@@ -31,7 +35,9 @@ function waitNextPaintFrame(): Promise<void> {
 const RESTORE_PHYSICAL_LINE_SCROLL_TO_END = Number.MAX_SAFE_INTEGER;
 
 function isReadingCompleteProgress(progress: number | undefined): boolean {
-  return typeof progress === "number" && Number.isFinite(progress) && progress >= 100;
+  return (
+    typeof progress === "number" && Number.isFinite(progress) && progress >= 100
+  );
 }
 
 type Persistence = ReturnType<typeof useAppPersistence>;
@@ -56,7 +62,7 @@ export function useAppFileSession(deps: {
   chapters: Ref<Chapter[]>;
   activeChapterIdx: Ref<number>;
   sidebarTab: Ref<"files" | "chapters" | "bookmarks">;
-  txtFiles: Ref<Array<{ name: string; path: string; size: number }>>;
+  txtFiles: Ref<TxtFileItem[]>;
   lastProbeLine: Ref<number>;
   viewportTopLine: Ref<number>;
   viewportEndLine: Ref<number>;
@@ -78,6 +84,11 @@ export function useAppFileSession(deps: {
   ebookParsing: Ref<boolean>;
   /** 正在转换的电子书源路径（用于底栏在 resetSession 之前显示「转换中…」） */
   ebookConversionSourcePath: Ref<string | null>;
+  /**
+   * 在合并进 `txtFiles` **之后**调用：传入本次新加入的路径；
+   * 若当前筛选为具体分类则写入列表项 `category`；为「全部 / 未分类」时不改。
+   */
+  applyCurrentFileCategoryIfConcrete?: (newPaths: string[]) => void;
 }) {
   const {
     persistFileListCache,
@@ -86,12 +97,11 @@ export function useAppFileSession(deps: {
     removeRecentFile,
     getFileMeta,
     persistFileMeta,
+    patchMetaProgressForPath,
     setEbookConvertedMeta,
   } = deps.persistence;
-  const {
-    pulseFileListCenter,
-    suppressFileListCenterAfterLoad,
-  } = deps.chapterSync;
+  const { pulseFileListCenter, suppressFileListCenterAfterLoad } =
+    deps.chapterSync;
 
   async function resolvePhysicalTextForOpen(
     filePath: string,
@@ -121,25 +131,37 @@ export function useAppFileSession(deps: {
       }
     }
 
-    deps.ebookConversionSourcePath.value = filePath;
-    deps.ebookParsing.value = true;
-    await nextTick();
-    await yieldToUi();
     try {
       const st = await window.colorTxt.stat(filePath);
       if (!st.isFile) {
         return { ok: false, message: `文件不存在或不可访问：${filePath}` };
       }
       const meta = getFileMeta(filePath);
-      const { colorTxtPath } = await ensureEbookColorTxt({
+      const { colorTxtPath, didConvert } = await ensureEbookColorTxt({
         sourceBookPath: filePath,
         ebookConvertOutputDir: deps.ebookConvertOutputDir.value,
         sourceMtimeMs: st.mtimeMs,
         existingConvertedPath: meta?.convertedTxtPath,
         existingSourceMtimeMs: meta?.sourceMtimeMsAtConvert,
+        onActualConversionStart: async () => {
+          deps.ebookConversionSourcePath.value = filePath;
+          deps.ebookParsing.value = true;
+          await nextTick();
+          await yieldToUi();
+        },
       });
-      setEbookConvertedMeta(filePath, colorTxtPath, st.mtimeMs);
-      persistFileMeta();
+      const recordedTxt = meta?.convertedTxtPath?.trim();
+      const pathMatch =
+        Boolean(recordedTxt) &&
+        normalizeFileMetaPathKey(recordedTxt!) ===
+          normalizeFileMetaPathKey(colorTxtPath);
+      const mtimeMatch =
+        typeof meta?.sourceMtimeMsAtConvert === "number" &&
+        meta.sourceMtimeMsAtConvert === st.mtimeMs;
+      if (didConvert || !pathMatch || !mtimeMatch) {
+        setEbookConvertedMeta(filePath, colorTxtPath, st.mtimeMs);
+        persistFileMeta();
+      }
       const tst = await window.colorTxt.stat(colorTxtPath);
       if (!tst.isFile) {
         return {
@@ -222,14 +244,21 @@ export function useAppFileSession(deps: {
   function rememberCurrentFileLine() {
     if (!deps.currentFile.value) return;
     if (!deps.readingProgressSynced.value) return;
-    touchRecentFile(deps.currentFile.value, false, {
+    const path = deps.currentFile.value;
+    const progress = deps.stream.calcProgressPercentByViewportDisplay(
+      deps.viewportTopLine.value,
+      deps.viewportEndLine.value,
+    );
+    touchRecentFile(path, false, {
       persistRecent: true,
       persistMeta: true,
-      progress: deps.stream.calcProgressPercentByViewportDisplay(
-        deps.viewportTopLine.value,
-        deps.viewportEndLine.value,
-      ),
+      /** 换书前落盘：原地改 meta，避免整表 upsert 新数组 + 侧栏整表连锁重算 */
+      updateMeta: false,
+      ...(typeof progress === "number" ? { progress } : {}),
     });
+    if (typeof progress === "number") {
+      patchMetaProgressForPath(path, progress);
+    }
   }
 
   /** 在 `resetSession` 之前清空阅读区，便于感知正在加载 */
@@ -264,6 +293,7 @@ export function useAppFileSession(deps: {
     if (fileList.length === 0) return false;
     deps.txtFiles.value = fileList.map((f) =>
       normalizeTxtFileItem({
+        ...f,
         name: String(f.name ?? ""),
         path: String(f.path ?? ""),
         size: typeof f.size === "number" ? f.size : 0,
@@ -315,7 +345,8 @@ export function useAppFileSession(deps: {
       if (isReadingCompleteProgress(meta?.progress)) {
         deps.pendingRestoreEditorViewState.value = null;
         deps.pendingRestoreViewportTopPhysicalLine.value = null;
-        deps.pendingRestorePhysicalLine.value = RESTORE_PHYSICAL_LINE_SCROLL_TO_END;
+        deps.pendingRestorePhysicalLine.value =
+          RESTORE_PHYSICAL_LINE_SCROLL_TO_END;
       } else if (canRestoreViewState) {
         deps.pendingRestoreEditorViewState.value = savedVs;
         deps.pendingRestorePhysicalLine.value = null;
@@ -352,7 +383,7 @@ export function useAppFileSession(deps: {
 
   async function openFileViaDialog() {
     if (!window.colorTxt) {
-      window.alert("preload 未注入：请重启应用（或检查主进程 preload 路径）");
+      await appAlert("preload 未注入：请重启应用（或检查主进程 preload 路径）");
       return;
     }
     const filePath = await window.colorTxt.openTxtDialog();
@@ -360,9 +391,9 @@ export function useAppFileSession(deps: {
     await openFilePath(filePath);
   }
 
-  function openFileFromSidebar(filePath: string) {
+  function openFileFromSidebar(item: TxtFileItem) {
     suppressFileListCenterAfterLoad.value = true;
-    void openFilePath(filePath, { keepSidebarTab: true });
+    void openFilePath(item.path, { keepSidebarTab: true, listRow: item });
   }
 
   function subscribeDirListTxtScan(): () => void {
@@ -378,18 +409,81 @@ export function useAppFileSession(deps: {
 
   async function pickTxtDirectory() {
     if (!window.colorTxt) {
-      window.alert("目录选择接口未加载，请重启应用");
+      await appAlert("目录选择接口未加载，请重启应用");
       return;
     }
     const unsub = subscribeDirListTxtScan();
     try {
       const result = await readTxtDirectoryFromDialog(window.colorTxt);
       if (!result.ok && result.reason === "missingApi") {
-        window.alert("目录选择接口未加载，请重启应用");
+        await appAlert("目录选择接口未加载，请重启应用");
         return;
       }
       if (!result.ok) return;
-      deps.txtFiles.value = mergeTxtFileLists(deps.txtFiles.value, result.files);
+      const knownPaths = new Set(deps.txtFiles.value.map((f) => f.path));
+      const newPaths = result.files
+        .map((f) => f.path)
+        .filter((path) => !knownPaths.has(path));
+      deps.txtFiles.value = mergeTxtFileLists(
+        deps.txtFiles.value,
+        result.files,
+      );
+      deps.applyCurrentFileCategoryIfConcrete?.(newPaths);
+      persistFileListCache();
+      deps.sidebarTab.value = "files";
+      centerFileListIfCurrentInList();
+      if (
+        !deps.currentFile.value ||
+        !deps.txtFiles.value.some((f) => f.path === deps.currentFile.value)
+      ) {
+        scrollFileListsToIndex(0);
+      }
+    } finally {
+      unsub();
+      deps.dirListScanning.value = false;
+      deps.dirListCurrentName.value = "";
+    }
+  }
+
+  /** 拖放 / 文件列表导入：按路径顺序合并目录内 txt/电子书 或单个支持的文件 */
+  async function importPathsIntoFileList(paths: string[]) {
+    if (!window.colorTxt || paths.length === 0) return;
+    const unsub = subscribeDirListTxtScan();
+    try {
+      const knownPaths = new Set(deps.txtFiles.value.map((f) => f.path));
+      let merged = deps.txtFiles.value;
+      const newPaths: string[] = [];
+      for (const p of paths) {
+        try {
+          const st = await window.colorTxt.stat(p);
+          if (st.isDirectory) {
+            const dirResult = await window.colorTxt.listTxtFilesInDirectory(p);
+            const items = dirResult.files.map(normalizeTxtFileItem);
+            for (const it of items) {
+              if (!knownPaths.has(it.path)) {
+                knownPaths.add(it.path);
+                newPaths.push(it.path);
+              }
+            }
+            merged = mergeTxtFileLists(merged, items);
+          } else if (st.isFile && isSupportedBookPath(p)) {
+            const item = normalizeTxtFileItem({
+              name: basenameFromPath(p),
+              path: p,
+              size: st.size,
+            });
+            if (!knownPaths.has(item.path)) {
+              knownPaths.add(item.path);
+              newPaths.push(item.path);
+            }
+            merged = mergeTxtFileLists(merged, [item]);
+          }
+        } catch {
+          /* 单路径失败则跳过 */
+        }
+      }
+      deps.txtFiles.value = merged;
+      deps.applyCurrentFileCategoryIfConcrete?.(newPaths);
       persistFileListCache();
       deps.sidebarTab.value = "files";
       centerFileListIfCurrentInList();
@@ -425,6 +519,8 @@ export function useAppFileSession(deps: {
       restorePhysicalLine?: number;
       skipRememberCurrent?: boolean;
       keepSidebarTab?: boolean;
+      /** 侧栏列表点击时传入当前行 */
+      listRow?: TxtFileItem;
     },
   ) {
     if (!options?.keepSidebarTab) {
@@ -444,10 +540,11 @@ export function useAppFileSession(deps: {
       filePath,
       txtFiles: deps.txtFiles.value,
       statFile: (path) => window.colorTxt.stat(path),
+      listRow: options?.listRow,
     });
     if (!prepared.ok) {
       const tip = prepared.message;
-      window.alert(tip);
+      await appAlert(tip);
       removeRecentFile(filePath);
       suppressFileListCenterAfterLoad.value = false;
       return false;
@@ -458,7 +555,7 @@ export function useAppFileSession(deps: {
       prepared.fileSize,
     );
     if (!resolved.ok) {
-      window.alert(resolved.message);
+      await appAlert(resolved.message);
       removeRecentFile(filePath);
       suppressFileListCenterAfterLoad.value = false;
       return false;
@@ -475,7 +572,10 @@ export function useAppFileSession(deps: {
       !Array.isArray(savedVs) &&
       hasAnchor;
 
-    if (options?.restorePhysicalLine != null || normalizedExplicitRestore != null) {
+    if (
+      options?.restorePhysicalLine != null ||
+      normalizedExplicitRestore != null
+    ) {
       deps.pendingRestoreEditorViewState.value = null;
       deps.pendingRestoreViewportTopPhysicalLine.value = null;
       deps.pendingRestorePhysicalLine.value =
@@ -485,7 +585,8 @@ export function useAppFileSession(deps: {
     } else if (isReadingCompleteProgress(meta?.progress)) {
       deps.pendingRestoreEditorViewState.value = null;
       deps.pendingRestoreViewportTopPhysicalLine.value = null;
-      deps.pendingRestorePhysicalLine.value = RESTORE_PHYSICAL_LINE_SCROLL_TO_END;
+      deps.pendingRestorePhysicalLine.value =
+        RESTORE_PHYSICAL_LINE_SCROLL_TO_END;
     } else if (canRestoreViewState) {
       deps.pendingRestoreEditorViewState.value = savedVs;
       deps.pendingRestorePhysicalLine.value = null;
@@ -539,6 +640,7 @@ export function useAppFileSession(deps: {
     openFileFromSidebar,
     subscribeDirListTxtScan,
     pickTxtDirectory,
+    importPathsIntoFileList,
     scrollFileListsToIndex,
     openFilePath,
     openRecentFileFromHistory,

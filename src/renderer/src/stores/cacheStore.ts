@@ -1,6 +1,12 @@
-export type TxtFileItem = { name: string; path: string; size: number };
-
 import type { ChapterMatchRule } from "../chapter";
+import type { FileCategoryDefinition, FileSortMode } from "../constants/fileCategories";
+import { isFileSortMode, parseFileCategoryCatalog } from "../constants/fileCategories";
+import {
+  migrateTxtFileListAddedAt,
+  type TxtFileItem,
+} from "../services/fileListService";
+
+export type { TxtFileItem };
 import {
   parseHighlightColorsArray,
 } from "../constants/highlightColors";
@@ -55,6 +61,12 @@ export type PersistedSettingsData = {
    * 非空时为绝对路径。若设置 JSON 中无此键，应用默认使用 `userData/ConvertedTxt`。
    */
   ebookConvertOutputDir?: string;
+  /** 文件列表分类筛选：`__all__` | `__uncategorized__` | 分类名 */
+  fileCategory?: string;
+  /** 文件列表排序方式 */
+  fileSort?: FileSortMode;
+  /** 用户维护的分类名称与颜色表 */
+  fileCategoryCatalog?: FileCategoryDefinition[];
 };
 
 export type PersistedSettingsLoadResult = {
@@ -82,12 +94,16 @@ function safeJsonParse(value: string | null | undefined) {
 
 function isTxtFileItemArray(x: unknown): x is TxtFileItem[] {
   if (!Array.isArray(x)) return false;
-  return x.every(
-    (item) =>
-      item &&
-      typeof item === "object" &&
-      typeof (item as TxtFileItem).path === "string",
-  );
+  return x.every((item) => {
+    if (!item || typeof item !== "object") return false;
+    const o = item as Record<string, unknown>;
+    if (typeof o.path !== "string") return false;
+    if (o.addedAt !== undefined) {
+      if (typeof o.addedAt !== "number" || !Number.isFinite(o.addedAt)) return false;
+    }
+    if (o.category !== undefined && typeof o.category !== "string") return false;
+    return true;
+  });
 }
 
 export function loadPersistedSettingsData(
@@ -196,6 +212,14 @@ export function loadPersistedSettingsData(
   if (typeof obj.ebookConvertOutputDir === "string") {
     data.ebookConvertOutputDir = obj.ebookConvertOutputDir;
   }
+  if (typeof obj.fileCategory === "string" && obj.fileCategory.trim()) {
+    data.fileCategory = obj.fileCategory.trim();
+  }
+  if (typeof obj.fileSort === "string" && isFileSortMode(obj.fileSort)) {
+    data.fileSort = obj.fileSort;
+  }
+  const catalog = parseFileCategoryCatalog(obj.fileCategoryCatalog);
+  if (catalog) data.fileCategoryCatalog = catalog;
   return { data, ebookConvertOutputDirKeyPresent };
 }
 
@@ -265,7 +289,8 @@ export function loadTxtFileListSnapshot(
   key: string,
 ): TxtFileItem[] {
   const parsed = safeJsonParse(storage?.getItem(key));
-  return isTxtFileItemArray(parsed) ? parsed : [];
+  if (!isTxtFileItemArray(parsed)) return [];
+  return migrateTxtFileListAddedAt(parsed);
 }
 
 export function persistTxtFileListSnapshot(

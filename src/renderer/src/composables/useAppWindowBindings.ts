@@ -1,7 +1,11 @@
 import { nextTick, onBeforeUnmount, onMounted, type Ref } from "vue";
 import type ReaderMain from "../components/ReaderMain.vue";
-import { mergeTxtFileLists } from "../services/fileListService";
 import { isSupportedBookPath } from "../ebook/ebookFormat";
+import {
+  collectFsPathsFromDataTransfer,
+  dataTransferLikelyHasExternalFiles,
+} from "../utils/dragDropFsPaths";
+import { appAlert } from "../services/appAlert";
 import { bindAppShortcuts } from "../services/shortcutService";
 import { hasModalOnStack } from "../utils/modalStack";
 import { useAppFileSession } from "./useAppFileSession";
@@ -10,6 +14,15 @@ import type { ShortcutBindingMap } from "../services/shortcutRegistry";
 
 type FileSession = ReturnType<typeof useAppFileSession>;
 type Stream = ReturnType<typeof useTxtStreamPipeline>;
+
+function isOverFileListDropZone(ev: DragEvent): boolean {
+  for (const n of ev.composedPath()) {
+    if (n instanceof HTMLElement && n.dataset.dropZone === "file-list") {
+      return true;
+    }
+  }
+  return false;
+}
 
 export function useAppWindowBindings(deps: {
   readerRef: Ref<InstanceType<typeof ReaderMain> | null>;
@@ -79,6 +92,8 @@ export function useAppWindowBindings(deps: {
   activeStreamFilePath: Ref<string | null>;
   /** 流结束并完成阅读进度同步后为 true，此前 persistFileMeta 不写盘 */
   readingProgressSynced: Ref<boolean>;
+  /** 拖入阅读区时，在阅读区容器上显示「打开文件」局部蒙层 */
+  readerDropOverlayVisible: Ref<boolean>;
 }) {
   const unsubscribers: Array<() => void> = [];
 
@@ -117,9 +132,7 @@ export function useAppWindowBindings(deps: {
         });
       }
     };
-    unsubscribers.push(
-      window.colorTxt.onFullscreenChanged(onFullscreenChange),
-    );
+    unsubscribers.push(window.colorTxt.onFullscreenChanged(onFullscreenChange));
 
     const onDocumentKeydownEscapeFullscreen = (ev: KeyboardEvent) => {
       if (ev.key !== "Escape") return;
@@ -191,26 +204,26 @@ export function useAppWindowBindings(deps: {
     );
 
     if (!window.colorTxt) {
-      window.alert(
+      await appAlert(
         `preload 未注入（__COLORTXT_PRELOAD__=${String(
           (window as unknown as { __COLORTXT_PRELOAD__?: unknown })
             .__COLORTXT_PRELOAD__,
         )}）`,
       );
+      return;
     }
     const globalShortcutResult = await window.colorTxt.setGlobalShortcut(
       deps.shortcutBindings.value.toggleAllWindowsVisibility,
     );
     if (!globalShortcutResult.ok) {
-      window.alert(globalShortcutResult.message || "系统级快捷键设置失败");
+      await appAlert(globalShortcutResult.message || "系统级快捷键设置失败");
     }
 
     const streamMatchesCurrent = (payload: {
       filePath: string;
       sessionFilePath?: string;
     }) =>
-      (payload.sessionFilePath ?? payload.filePath) ===
-      deps.currentFile.value;
+      (payload.sessionFilePath ?? payload.filePath) === deps.currentFile.value;
 
     unsubscribers.push(
       window.colorTxt.onStreamStart((payload) => {
@@ -241,138 +254,135 @@ export function useAppWindowBindings(deps: {
       }),
       window.colorTxt.onStreamEnd((payload) => {
         void (async () => {
-        if (!streamMatchesCurrent(payload)) return;
-        if (
-          deps.activeStreamRequestId.value == null ||
-          payload.requestId !== deps.activeStreamRequestId.value ||
-          payload.filePath !== deps.activeStreamFilePath.value
-        ) {
-          return;
-        }
-        deps.activeStreamRequestId.value = null;
-        deps.activeStreamFilePath.value = null;
-        await deps.stream.flushCarry();
-        deps.loading.value = false;
-        deps.loadingProgressPercent.value = null;
-        const restoreVs = deps.pendingRestoreEditorViewState.value;
-        deps.pendingRestoreEditorViewState.value = null;
-        const restoreAnchorPhy = deps.pendingRestoreViewportTopPhysicalLine.value;
-        deps.pendingRestoreViewportTopPhysicalLine.value = null;
-        const restorePhys = deps.pendingRestorePhysicalLine.value;
-        deps.pendingRestorePhysicalLine.value = null;
-        const totalPhysical = Math.max(1, deps.stream.getPhysicalLineCount());
+          if (!streamMatchesCurrent(payload)) return;
+          if (
+            deps.activeStreamRequestId.value == null ||
+            payload.requestId !== deps.activeStreamRequestId.value ||
+            payload.filePath !== deps.activeStreamFilePath.value
+          ) {
+            return;
+          }
+          deps.activeStreamRequestId.value = null;
+          deps.activeStreamFilePath.value = null;
+          await deps.stream.flushCarry();
+          deps.loading.value = false;
+          deps.loadingProgressPercent.value = null;
+          const restoreVs = deps.pendingRestoreEditorViewState.value;
+          deps.pendingRestoreEditorViewState.value = null;
+          const restoreAnchorPhy =
+            deps.pendingRestoreViewportTopPhysicalLine.value;
+          deps.pendingRestoreViewportTopPhysicalLine.value = null;
+          const restorePhys = deps.pendingRestorePhysicalLine.value;
+          deps.pendingRestorePhysicalLine.value = null;
+          const totalPhysical = Math.max(1, deps.stream.getPhysicalLineCount());
 
-        const markReadingProgressSynced = () => {
-          deps.readingProgressSynced.value = true;
-        };
+          const markReadingProgressSynced = () => {
+            deps.readingProgressSynced.value = true;
+          };
 
-        const finishReadingSync = () => {
-          deps.readerRef.value?.normalizeScrollAfterEmbeddedViewZones?.();
-          deps.pulseChapterListCenter(false);
-          markReadingProgressSynced();
-          deps.readerRef.value?.emitProbeLine();
-        };
-
-        if (
-          restoreVs != null &&
-          typeof restoreVs === "object" &&
-          !Array.isArray(restoreVs) &&
-          restoreAnchorPhy != null &&
-          Number.isFinite(restoreAnchorPhy)
-        ) {
-          const anchor = Math.max(1, Math.floor(restoreAnchorPhy));
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              deps.readerRef.value?.restoreEditorViewState?.(restoreVs);
-              void nextTick(() => {
-                const reader = deps.readerRef.value;
-                if (!reader?.getViewportTopLine || !reader.jumpToLine) {
-                  finishReadingSync();
-                  return;
-                }
-                const current = deps.stream.viewportDisplayLineToPhysicalLine(
-                  reader.getViewportTopLine(),
-                );
-                if (current === anchor) {
-                  finishReadingSync();
-                  return;
-                }
-                if (anchor >= totalPhysical) {
-                  reader.scrollToBottom?.(false);
-                  void nextTick(finishReadingSync);
-                  return;
-                }
-                let displayLine = deps.stream.physicalLineToDisplayForReader(
-                  anchor,
-                );
-                const maxDisplay = Math.max(1, deps.stream.getLineCount());
-                displayLine = Math.min(
-                  Math.max(1, displayLine),
-                  maxDisplay,
-                );
-                if (displayLine <= 1) {
-                  reader.jumpToLine?.(1, false);
-                } else {
-                  reader.jumpToLine(displayLine, false);
-                }
-                void nextTick(finishReadingSync);
-              });
-            });
-          });
-          return;
-        }
-
-        let jumpLine: number | null = null;
-        if (restorePhys != null && restorePhys >= totalPhysical) {
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              deps.readerRef.value?.scrollToBottom?.(false);
-              void nextTick(() => {
-                deps.readerRef.value?.normalizeScrollAfterEmbeddedViewZones?.();
-                deps.pulseChapterListCenter(false);
-                markReadingProgressSynced();
-                deps.readerRef.value?.emitProbeLine();
-              });
-            });
-          });
-          return;
-        }
-
-        if (restorePhys != null) {
-          jumpLine = deps.stream.physicalLineToBottomDisplayForReader(
-            Math.min(restorePhys, totalPhysical),
-          );
-          const maxDisplay = Math.max(1, deps.stream.getLineCount());
-          jumpLine = Math.min(Math.max(1, jumpLine), maxDisplay);
-        }
-
-        if (jumpLine != null) {
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              const reader = deps.readerRef.value;
-              if (reader) {
-                /** 篇首：用顶对齐 jumpToLine(1)；随后 nextTick 里 normalize 会把「篇首插图」时的 scrollTop≈top1 钳到 0。 */
-                if (jumpLine <= 1) {
-                  reader.jumpToLine?.(1, false);
-                } else {
-                  reader.scrollLineToBottom?.(jumpLine, false);
-                }
-              }
-              void nextTick(() => {
-                deps.readerRef.value?.normalizeScrollAfterEmbeddedViewZones?.();
-                deps.pulseChapterListCenter(false);
-                markReadingProgressSynced();
-                deps.readerRef.value?.emitProbeLine();
-              });
-            });
-          });
-        } else {
-          void nextTick(() => {
+          const finishReadingSync = () => {
             deps.readerRef.value?.normalizeScrollAfterEmbeddedViewZones?.();
+            deps.pulseChapterListCenter(false);
             markReadingProgressSynced();
             deps.readerRef.value?.emitProbeLine();
-          });
-        }
+          };
+
+          if (
+            restoreVs != null &&
+            typeof restoreVs === "object" &&
+            !Array.isArray(restoreVs) &&
+            restoreAnchorPhy != null &&
+            Number.isFinite(restoreAnchorPhy)
+          ) {
+            const anchor = Math.max(1, Math.floor(restoreAnchorPhy));
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                deps.readerRef.value?.restoreEditorViewState?.(restoreVs);
+                void nextTick(() => {
+                  const reader = deps.readerRef.value;
+                  if (!reader?.getViewportTopLine || !reader.jumpToLine) {
+                    finishReadingSync();
+                    return;
+                  }
+                  const current = deps.stream.viewportDisplayLineToPhysicalLine(
+                    reader.getViewportTopLine(),
+                  );
+                  if (current === anchor) {
+                    finishReadingSync();
+                    return;
+                  }
+                  if (anchor >= totalPhysical) {
+                    reader.scrollToBottom?.(false);
+                    void nextTick(finishReadingSync);
+                    return;
+                  }
+                  let displayLine =
+                    deps.stream.physicalLineToDisplayForReader(anchor);
+                  const maxDisplay = Math.max(1, deps.stream.getLineCount());
+                  displayLine = Math.min(Math.max(1, displayLine), maxDisplay);
+                  if (displayLine <= 1) {
+                    reader.jumpToLine?.(1, false);
+                  } else {
+                    reader.jumpToLine(displayLine, false);
+                  }
+                  void nextTick(finishReadingSync);
+                });
+              });
+            });
+            return;
+          }
+
+          let jumpLine: number | null = null;
+          if (restorePhys != null && restorePhys >= totalPhysical) {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                deps.readerRef.value?.scrollToBottom?.(false);
+                void nextTick(() => {
+                  deps.readerRef.value?.normalizeScrollAfterEmbeddedViewZones?.();
+                  deps.pulseChapterListCenter(false);
+                  markReadingProgressSynced();
+                  deps.readerRef.value?.emitProbeLine();
+                });
+              });
+            });
+            return;
+          }
+
+          if (restorePhys != null) {
+            jumpLine = deps.stream.physicalLineToBottomDisplayForReader(
+              Math.min(restorePhys, totalPhysical),
+            );
+            const maxDisplay = Math.max(1, deps.stream.getLineCount());
+            jumpLine = Math.min(Math.max(1, jumpLine), maxDisplay);
+          }
+
+          if (jumpLine != null) {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                const reader = deps.readerRef.value;
+                if (reader) {
+                  /** 篇首：用顶对齐 jumpToLine(1)；随后 nextTick 里 normalize 会把「篇首插图」时的 scrollTop≈top1 钳到 0。 */
+                  if (jumpLine <= 1) {
+                    reader.jumpToLine?.(1, false);
+                  } else {
+                    reader.scrollLineToBottom?.(jumpLine, false);
+                  }
+                }
+                void nextTick(() => {
+                  deps.readerRef.value?.normalizeScrollAfterEmbeddedViewZones?.();
+                  deps.pulseChapterListCenter(false);
+                  markReadingProgressSynced();
+                  deps.readerRef.value?.emitProbeLine();
+                });
+              });
+            });
+          } else {
+            void nextTick(() => {
+              deps.readerRef.value?.normalizeScrollAfterEmbeddedViewZones?.();
+              markReadingProgressSynced();
+              deps.readerRef.value?.emitProbeLine();
+            });
+          }
         })();
       }),
       window.colorTxt.onStreamError((e) => {
@@ -393,86 +403,102 @@ export function useAppWindowBindings(deps: {
         deps.pendingRestoreViewportTopPhysicalLine.value = null;
         deps.suppressFileListCenterAfterLoad.value = false;
         deps.readingProgressSynced.value = true;
-        window.alert(`读取失败：${e.message}`);
+        void appAlert(`读取失败：${e.message}`);
       }),
     );
 
-    /** 使用冒泡阶段：子组件若需独占拖放，在自身 drop 里 stopPropagation */
+    /** 非文件列表区域 drop：仅打开拖入列表中最外层第一个支持的文件 */
+    async function openFirstSupportedTopLevelPath(paths: string[]) {
+      for (const p of paths) {
+        try {
+          const st = await window.colorTxt.stat(p);
+          if (!st.isFile) continue;
+          if (!isSupportedBookPath(p)) continue;
+          await deps.fileSession.openFilePath(p);
+          return;
+        } catch {
+          /* 跳过该路径 */
+        }
+      }
+    }
+
+    function clearReaderDropOverlay() {
+      deps.readerDropOverlayVisible.value = false;
+    }
+
+    function syncReaderDropOverlayFromEvent(ev: DragEvent) {
+      const dt = ev.dataTransfer;
+      if (!dataTransferLikelyHasExternalFiles(dt)) {
+        clearReaderDropOverlay();
+        return;
+      }
+      if (isOverFileListDropZone(ev)) {
+        clearReaderDropOverlay();
+        return;
+      }
+      /** 文件列表以外（含顶栏、底栏、侧栏其它 tab 等）一律在阅读区容器上提示「打开文件」 */
+      deps.readerDropOverlayVisible.value = true;
+    }
+
     const onDragOver = (ev: DragEvent) => {
+      if (!dataTransferLikelyHasExternalFiles(ev.dataTransfer)) return;
       ev.preventDefault();
       if (ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
+      syncReaderDropOverlayFromEvent(ev);
+    };
+
+    const onDragEnter = (ev: DragEvent) => {
+      if (!dataTransferLikelyHasExternalFiles(ev.dataTransfer)) return;
+      ev.preventDefault();
+      syncReaderDropOverlayFromEvent(ev);
+    };
+
+    const onWindowDragLeave = (ev: DragEvent) => {
+      if (!dataTransferLikelyHasExternalFiles(ev.dataTransfer)) return;
+      const related = ev.relatedTarget;
+      if (
+        related instanceof Node &&
+        document.documentElement.contains(related)
+      ) {
+        return;
+      }
+      clearReaderDropOverlay();
+    };
+
+    const onWindowDragEnd = () => {
+      clearReaderDropOverlay();
     };
 
     const onDrop = (ev: DragEvent) => {
       ev.preventDefault();
       ev.stopPropagation();
+      clearReaderDropOverlay();
 
-      const dt = ev.dataTransfer;
-      if (!dt) return;
+      const paths = collectFsPathsFromDataTransfer(ev.dataTransfer);
+      if (paths.length === 0) return;
 
-      const file: File | undefined =
-        dt.items?.[0]?.kind === "file"
-          ? (dt.items[0].getAsFile() ?? undefined)
-          : dt.files?.[0];
-
-      if (!file) return;
-
-      const filePath = window.colorTxt.getPathForFile(file);
-      if (!filePath) {
-        return;
-      }
-
-      void (async () => {
-        try {
-          const fileStat = await window.colorTxt.stat(filePath);
-          if (fileStat.isDirectory) {
-            const unsub = deps.fileSession.subscribeDirListTxtScan();
-            try {
-              const dirResult =
-                await window.colorTxt.listTxtFilesInDirectory(filePath);
-              deps.txtFiles.value = mergeTxtFileLists(
-                deps.txtFiles.value,
-                dirResult.files,
-              );
-              deps.persistFileListCache();
-              deps.sidebarTab.value = "files";
-              deps.fileSession.centerFileListIfCurrentInList();
-              if (
-                !deps.currentFile.value ||
-                !deps.txtFiles.value.some(
-                  (f) => f.path === deps.currentFile.value,
-                )
-              ) {
-                deps.fileSession.scrollFileListsToIndex(0);
-              }
-            } finally {
-              unsub();
-              deps.dirListScanning.value = false;
-              deps.dirListCurrentName.value = "";
-            }
-            return;
-          }
-          if (!fileStat.isFile) {
-            return;
-          }
-          const name = file.name ?? "";
-          if (name && !isSupportedBookPath(filePath)) {
-            return;
-          }
-          void deps.fileSession.openFilePath(filePath);
-        } catch {
-          /* 静默忽略 */
-        }
-      })();
+      void openFirstSupportedTopLevelPath(paths);
     };
 
-    document.addEventListener("dragover", onDragOver, false);
+    window.addEventListener("dragover", onDragOver, true);
+    window.addEventListener("dragenter", onDragEnter, true);
+    window.addEventListener("dragleave", onWindowDragLeave, true);
     document.addEventListener("drop", onDrop, false);
+    window.addEventListener("dragend", onWindowDragEnd, false);
     unsubscribers.push(() =>
-      document.removeEventListener("dragover", onDragOver, false),
+      window.removeEventListener("dragover", onDragOver, true),
+    );
+    unsubscribers.push(() =>
+      window.removeEventListener("dragenter", onDragEnter, true),
+    );
+    unsubscribers.push(() =>
+      window.removeEventListener("dragleave", onWindowDragLeave, true),
     );
     unsubscribers.push(() =>
       document.removeEventListener("drop", onDrop, false),
+    );
+    unsubscribers.push(() =>
+      window.removeEventListener("dragend", onWindowDragEnd, false),
     );
 
     const onMouseMove = (ev: MouseEvent) => {

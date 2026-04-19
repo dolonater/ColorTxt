@@ -144,7 +144,7 @@ async function onClearCache() {
     v-model="modelValue"
     title="设置"
     max-width="500px"
-    :mask-closable="true"
+    :mask-closable="false"
     :esc-closable="true"
   >
     <div class="settingsBody">

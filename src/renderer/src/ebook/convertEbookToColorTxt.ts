@@ -219,6 +219,11 @@ export async function ensureEbookColorTxt(params: {
   sourceMtimeMs: number;
   existingConvertedPath?: string | undefined;
   existingSourceMtimeMs?: number | undefined;
+  /**
+   * 仅在确定需要重新解析/写入转换结果时调用（缓存命中不会触发）。
+   * 用于 UI：避免已存在 `{basename}.txt` 时仍闪「转换中…」。
+   */
+  onActualConversionStart?: () => void | Promise<void>;
 }): Promise<{ colorTxtPath: string; didConvert: boolean }> {
   const absSource = params.sourceBookPath.trim();
   if (!isEbookFilePath(absSource)) {
@@ -264,6 +269,9 @@ export async function ensureEbookColorTxt(params: {
     }
   }
 
+  if (params.onActualConversionStart) {
+    await Promise.resolve(params.onActualConversionStart());
+  }
   await yieldToUi();
   const buf = await readBookAsArrayBuffer(absSource);
   const artifacts = await convertBookBufferToArtifacts(absSource, buf);

@@ -1,4 +1,4 @@
-import { ref, shallowRef, type Ref, type ShallowRef } from "vue";
+import { ref, shallowRef, watch, triggerRef, type Ref, type ShallowRef } from "vue";
 import type { RecentFileItem } from "../components/AppHeader.vue";
 import type ReaderMain from "../components/ReaderMain.vue";
 import {
@@ -16,6 +16,16 @@ import {
   persistTxtFileListSnapshot,
   type TxtFileItem,
 } from "../stores/cacheStore";
+import type {
+  FileCategoryDefinition,
+  FileSortMode,
+} from "../constants/fileCategories";
+import {
+  cloneDefaultFileCategoryCatalog,
+  DEFAULT_FILE_SORT,
+  isFileSortMode,
+  normalizeCategoryFilter,
+} from "../constants/fileCategories";
 import {
   fileHistoryKey,
   loadRecentFileRecords,
@@ -96,7 +106,7 @@ export function useAppPersistence(deps: {
   stream: StreamApi;
   lastProbeLine: Ref<number>;
   viewportEndLine: Ref<number>;
-  txtFiles: Ref<Array<{ name: string; path: string; size: number }>>;
+  txtFiles: Ref<TxtFileItem[]>;
   currentFile: Ref<string | null>;
   /**
    * 当前打开文件是否已完成「加载 + 阅读位置同步」（流结束并完成跳转/滚动，或无需恢复时）。
@@ -131,8 +141,56 @@ export function useAppPersistence(deps: {
   highlightColorsDark: Ref<string[]>;
   /** 电子书转换输出目录；空字符串表示与源文件同目录；无持久化键时默认 userData/ConvertedTxt */
   ebookConvertOutputDir: Ref<string>;
+  fileCategory: Ref<string>;
+  fileSort: Ref<FileSortMode>;
+  fileCategoryCatalog: Ref<FileCategoryDefinition[]>;
 }) {
   const settingsLoaded = ref(false);
+
+  /** 合并短时间内的 file.meta 写盘，避免换书 / 恢复 / 拖入打开时主线程长时间 JSON.stringify */
+  const FILE_META_DISK_DEBOUNCE_MS = 420;
+  let fileMetaWriteTimer: ReturnType<typeof setTimeout> | null = null;
+  let pendingFileMetaWrite: "gated" | "forced" | null = null;
+
+  function mergePendingFileMetaMode(
+    prev: "gated" | "forced" | null,
+    next: "gated" | "forced",
+  ): "gated" | "forced" {
+    if (prev === "forced" || next === "forced") return "forced";
+    return "gated";
+  }
+
+  function cancelScheduledFileMetaWrite() {
+    if (fileMetaWriteTimer !== null) {
+      clearTimeout(fileMetaWriteTimer);
+      fileMetaWriteTimer = null;
+    }
+    pendingFileMetaWrite = null;
+  }
+
+  function runScheduledFileMetaWrite() {
+    fileMetaWriteTimer = null;
+    const mode = pendingFileMetaWrite;
+    pendingFileMetaWrite = null;
+    if (mode === null) return;
+    if (mode === "gated") {
+      if (deps.currentFile.value && !deps.readingProgressSynced.value) return;
+    }
+    persistFileMetaRecords(
+      window.localStorage,
+      fileMetaKey,
+      deps.fileMetaRecords.value,
+    );
+  }
+
+  function scheduleFileMetaDiskWrite(mode: "gated" | "forced") {
+    pendingFileMetaWrite = mergePendingFileMetaMode(pendingFileMetaWrite, mode);
+    if (fileMetaWriteTimer !== null) clearTimeout(fileMetaWriteTimer);
+    fileMetaWriteTimer = setTimeout(
+      runScheduledFileMetaWrite,
+      FILE_META_DISK_DEBOUNCE_MS,
+    );
+  }
 
   /** 从 file.meta 构建的进度映射；仅在 meta 结构变化时整表重建，避免滚动时 O(列表长度) */
   const metaProgressByPathKey: ShallowRef<Map<string, number>> = shallowRef(
@@ -150,6 +208,16 @@ export function useAppPersistence(deps: {
       m.set(fileHistoryKey(r.path), r.progress);
     }
     metaProgressByPathKey.value = m;
+  }
+
+  /** 换书前仅更新一条路径的进度映射，避免 `rebuildMetaProgressMap` 整表 O(M) 扫描拖慢打开 */
+  function patchMetaProgressForPath(path: string, progress: number) {
+    if (!Number.isFinite(progress)) return;
+    const key = fileHistoryKey(path);
+    const m = metaProgressByPathKey.value;
+    if (m.get(key) === progress) return;
+    m.set(key, progress);
+    triggerRef(metaProgressByPathKey);
   }
 
   /** 避免每次写文件列表缓存都重写相同 JSON */
@@ -196,7 +264,12 @@ export function useAppPersistence(deps: {
   }
 
   function persistFileMeta() {
-    if (deps.currentFile.value && !deps.readingProgressSynced.value) return;
+    scheduleFileMetaDiskWrite("gated");
+  }
+
+  /** 取消防抖并不受阅读进度同步门控，立即写入 file.meta（关窗等场景须落盘进度/书签/视图状态等） */
+  function persistFileMetaImmediate() {
+    cancelScheduledFileMetaWrite();
     persistFileMetaRecords(
       window.localStorage,
       fileMetaKey,
@@ -207,7 +280,7 @@ export function useAppPersistence(deps: {
   /** 将内存中的最近文件与 file meta 写入 localStorage（窗口关闭时与内存中滚动等未落盘状态对齐） */
   function flushRecentFilesAndFileMetaToDisk() {
     persistRecentFiles();
-    persistFileMeta();
+    persistFileMetaImmediate();
   }
 
   function loadFileMeta() {
@@ -237,6 +310,7 @@ export function useAppPersistence(deps: {
    * - persistRecent：写入 colorTxt.recent.files
    * - persistMeta：写入 colorTxt.file.meta（关窗前等；受 readingProgressSynced 门控见 persistFileMeta）
    * - updateMeta：为 false 时（滚动 probe）不替换 meta 数组，仅原地改当前条，降低开销
+   * - rebuildProgressMap：仅在与 `updateMeta: false` 联用且需刷新 `metaProgressByPathKey` 时设为 true（如换书前落盘）；滚动 probe 切勿开启，否则每帧整表重建映射会卡死滚动。
    * 未传 `editorViewState` 且 `currentFile === path` 时从阅读器 `saveViewState` 取快照。
    */
   function touchRecentFile(
@@ -246,6 +320,8 @@ export function useAppPersistence(deps: {
       persistRecent?: boolean;
       persistMeta?: boolean;
       updateMeta?: boolean;
+      /** 原地写 progress 后是否重建进度映射（默认 false） */
+      rebuildProgressMap?: boolean;
       progress?: number;
       editorViewState?: unknown;
     },
@@ -304,6 +380,12 @@ export function useAppPersistence(deps: {
         if (viewportTopPhysicalLine !== undefined) {
           prev.viewportTopPhysicalLine = viewportTopPhysicalLine;
         }
+        if (
+          opts?.rebuildProgressMap === true &&
+          typeof progress === "number"
+        ) {
+          rebuildMetaProgressMap();
+        }
       } else if (typeof progress === "number" || viewState !== undefined) {
         deps.fileMetaRecords.value = upsertFileMetaRecord(
           deps.fileMetaRecords.value,
@@ -353,6 +435,35 @@ export function useAppPersistence(deps: {
     );
     rebuildMetaProgressMap();
   }
+
+  /** 仅更新「最后打开时间」；写盘与换书落盘合并防抖，避免每次打开都同步 stringify 整份 meta */
+  function touchFileLastOpened(path: string) {
+    const p = path.trim();
+    if (!p) return;
+    const now = Date.now();
+    const prev = findFileMetaRecord(deps.fileMetaRecords.value, p);
+    if (prev) {
+      prev.lastOpenedAt = now;
+    } else {
+      deps.fileMetaRecords.value = upsertFileMetaRecord(
+        deps.fileMetaRecords.value,
+        p,
+        () => ({ lastOpenedAt: now }),
+      );
+    }
+    scheduleFileMetaDiskWrite("forced");
+  }
+
+  watch(
+    () => deps.readingProgressSynced.value,
+    (synced, wasSynced) => {
+      if (synced && wasSynced === false) {
+        const p = deps.currentFile.value?.trim();
+        if (p) touchFileLastOpened(p);
+        scheduleFileMetaDiskWrite("gated");
+      }
+    },
+  );
 
   function upsertBookmark(path: string, line: number, note: string) {
     deps.fileMetaRecords.value = upsertBookmarkForFile(
@@ -522,6 +633,18 @@ export function useAppPersistence(deps: {
     if (typeof data.ebookConvertOutputDir === "string") {
       deps.ebookConvertOutputDir.value = data.ebookConvertOutputDir;
     }
+
+    deps.fileCategory.value = normalizeCategoryFilter(data.fileCategory);
+    deps.fileSort.value = isFileSortMode(data.fileSort)
+      ? data.fileSort
+      : DEFAULT_FILE_SORT;
+    if (data.fileCategoryCatalog && data.fileCategoryCatalog.length > 0) {
+      deps.fileCategoryCatalog.value = data.fileCategoryCatalog.map((c) => ({
+        ...c,
+      }));
+    } else {
+      deps.fileCategoryCatalog.value = cloneDefaultFileCategoryCatalog();
+    }
     return { ebookConvertOutputDirKeyPresent };
   }
 
@@ -573,6 +696,9 @@ export function useAppPersistence(deps: {
         DEFAULT_HIGHLIGHT_COLORS_DARK,
       ),
       ebookConvertOutputDir: deps.ebookConvertOutputDir.value,
+      fileCategory: deps.fileCategory.value,
+      fileSort: deps.fileSort.value,
+      fileCategoryCatalog: deps.fileCategoryCatalog.value,
     });
   }
 
@@ -651,6 +777,7 @@ export function useAppPersistence(deps: {
     persistFileMeta,
     getFileMeta,
     setEbookConvertedMeta,
+    touchFileLastOpened,
     upsertBookmark,
     removeBookmark,
     clearBookmarks,
@@ -660,6 +787,7 @@ export function useAppPersistence(deps: {
     persistWindowUnloadState,
     persistFileListCache,
     metaProgressByPathKey,
+    patchMetaProgressForPath,
     liveReadingProgress,
     clearPersistedSession,
     initPersistenceBootstrap,

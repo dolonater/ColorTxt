@@ -73,7 +73,7 @@ const api = {
     ipcRenderer.invoke("dialog:openDirectoryPlain") as Promise<string | null>,
   openTxtDirectoryDialog: () =>
     ipcRenderer.invoke("dialog:openTxtDirectory") as Promise<{
-      dirPath: string;
+      dirPaths: string[];
       files: Array<{ name: string; path: string; size: number }>;
     } | null>,
   confirmClearRecentFiles: () =>

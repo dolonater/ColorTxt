@@ -184,9 +184,22 @@ body,
   flex-shrink: 0;
   transition: 0.1s;
 }
-.btn:hover {
+.btn:hover,
+.btn.active {
   color: var(--accent);
   border-color: var(--accent);
+}
+
+/* 工具栏等处：仅图标的方形按钮，在 .btn 基础上收窄内边距 */
+.btn.btnIconSquare {
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+.btn.btnIconSquare svg path {
+  fill: currentColor;
 }
 .btn[size="large"] {
   padding: 6px 14px;
@@ -263,11 +276,28 @@ button.link:disabled {
   cursor: not-allowed;
 }
 
+button.link.primary {
+  color: var(--primary);
+}
+button.link.primary:not(:disabled):hover {
+  color: var(--primary-hover);
+}
+button.link.warning {
+  color: var(--warning);
+}
+button.link.warning:not(:disabled):hover {
+  color: var(--warning-hover);
+}
+button.link.success {
+  color: var(--success);
+}
+button.link.success:not(:disabled):hover {
+  color: var(--success-hover);
+}
 button.link.danger,
 button.link.hoverDanger:not(:disabled):hover {
   color: var(--danger);
 }
-
 button.link.danger:not(:disabled):hover {
   color: var(--danger-hover);
 }
@@ -388,4 +418,320 @@ textarea::placeholder {
 input:is([type="text"], [type="search"]):focus,
 textarea:focus {
   border-color: var(--accent);
+}
+
+/* -------------------------------------------------------------------------- */
+/* 应用壳层菜单：与 MoreMenu 一致的浮层面板 / 项 / 子菜单（下拉、右键、分类等） */
+/* -------------------------------------------------------------------------- */
+
+.appShellMenuPanel {
+  box-sizing: border-box;
+  padding: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+}
+
+.appShellMenuDivider {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--border);
+}
+
+.appShellMenuItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--list-item-fg);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.appShellMenuItem:hover:not(:disabled, .is-active) {
+  background: var(--list-item-bg-hover);
+  color: var(--list-item-fg);
+}
+
+.appShellMenuItem.is-active {
+  background: var(--list-item-bg-active);
+  color: var(--list-item-fg-active);
+}
+
+.appShellMenuItem:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 相邻项之间 1px，hover / 选中背景不紧贴（与 divider 间隔仍由 divider 的 margin 负责） */
+.appShellMenuItem + .appShellMenuItem {
+  margin-top: 1px;
+}
+
+.appShellMenuItem--danger {
+  color: var(--danger);
+}
+
+.appShellMenuItem--danger:hover:not(:disabled) {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.appShellMenuItem--primary {
+  color: var(--primary);
+}
+
+.appShellMenuItem--primary:hover:not(:disabled) {
+  background: var(--primary-bg);
+}
+
+.appShellMenuItem--success {
+  color: var(--success);
+}
+
+.appShellMenuItem--success:hover:not(:disabled) {
+  background: var(--success-bg);
+}
+
+.appShellMenuItem--warning {
+  color: var(--warning);
+}
+
+.appShellMenuItem--warning:hover:not(:disabled) {
+  background: var(--warning-bg);
+}
+
+.appShellMenuItemMark {
+  flex-shrink: 0;
+  width: 3px;
+  align-self: stretch;
+  min-height: 1.15em;
+  border-radius: 2px;
+  margin: 2px 0 0 0;
+}
+
+.appShellMenuItemRowBody {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.appShellMenuItemLabelWithCount {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.appShellMenuItemLabelText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 菜单项 / 下拉触发器上主标签后的附加文案（数量、说明等） */
+.appShellMenuItemSuffix {
+  flex-shrink: 0;
+  color: var(--secondary);
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.appShellMenuItemPrefix {
+  flex-shrink: 0;
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+}
+
+.appShellMenuItemPrefix svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+
+  path {
+    fill: var(--secondary);
+  }
+}
+
+.appShellMenuSubWrap {
+  position: relative;
+}
+
+.appShellMenuSubChevron {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.appShellMenuFlyout {
+  position: absolute;
+  z-index: 2;
+  min-width: 100px;
+  max-width: 50vw;
+  max-height: 320px;
+  overflow: hidden;
+  padding: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+}
+
+/* 与父行重叠若干像素，避免鼠标经过 margin 缝隙时离开 SubWrap 导致子菜单瞬间关闭 */
+.appShellMenuFlyout--left {
+  top: -6px;
+  right: 100%;
+  margin-right: 0;
+}
+
+.appShellMenuFlyout--right {
+  top: -6px;
+  left: 100%;
+  margin-left: 0;
+}
+
+.appShellMenuFlyoutList {
+  overflow: auto;
+  min-height: 0;
+  box-sizing: border-box;
+  /* 纵向滚动时与滚动条、与面板右内缘留出间距 */
+  padding-right: 6px;
+}
+
+.appShellMenuFlyoutItem {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--list-item-fg);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.appShellMenuFlyoutItem:hover {
+  background: var(--list-item-bg-hover);
+}
+
+.appShellMenuFlyoutItem + .appShellMenuFlyoutItem {
+  margin-top: 1px;
+}
+
+.appShellMenuFlyoutItem--rowBetween {
+  justify-content: space-between;
+}
+
+.appShellMenuFlyoutLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.appShellMenuFlyoutMeta {
+  flex-shrink: 0;
+  color: var(--warning);
+  font-size: 12px;
+}
+
+.appShellMenuFlyoutMeta--complete {
+  color: var(--success);
+}
+
+.appShellMenuFlyoutEmpty {
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.appShellMenuFlyoutAction {
+  flex-shrink: 0;
+}
+
+.appShellMenuFlyoutDivider {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--border);
+}
+
+.appShellMenuIconSlot {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--icon-btn-fg);
+}
+
+/**
+ * 仅当整块 `.appShellMenuPanel` 内至少有一个图标格含有 svg/img 时，才保留图标列宽度；
+ * 否则收起所有 `.appShellMenuIconSlot`（含仅占位的空 span），避免无图标菜单左侧空白。
+ * 顶栏「更多」等含图标的菜单不受影响；其中仅占位、无图标的项仍与有图标项对齐。
+ */
+.appShellMenuPanel:not(:has(.appShellMenuIconSlot :is(svg, img)))
+  .appShellMenuIconSlot {
+  display: none;
+  width: 0 !important;
+  min-width: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.appShellMenuIconSlot svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.appShellMenuIconSlot:not(.appShellMenuIconSlot--github):not(
+    .appShellMenuIconSlot--colorful
+  )
+  svg
+  path {
+  fill: currentColor;
+}
+
+.appShellMenuIconSlot--github svg path {
+  fill: var(--icon-btn-fg);
+}
+
+.appShellMenuLabel {
+  flex: 1;
+  min-width: 0;
+}
+
+.appShellMenuShortcut {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
 }

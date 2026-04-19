@@ -239,26 +239,35 @@ export function registerMainIpcHandlers(
 
   ipcMain.handle("dialog:openTxtDirectory", async (evt) => {
     const res = await dialog.showOpenDialog({
-      properties: ["openDirectory"],
+      properties: ["openDirectory", "multiSelections"],
     });
     if (res.canceled || res.filePaths.length === 0) return null;
 
-    const dirPath = res.filePaths[0];
+    const dirPaths = res.filePaths;
     const sender = evt.sender;
-    sender.send("dir:listTxtFiles:scan", {
-      phase: "start",
-      dirPath,
-    } satisfies { phase: "start"; dirPath: string });
-    const files = (
-      await collectTxtFilesUnderRoot(dirPath, (item) => {
+    const byPath = new Map<string, TxtFileItem>();
+
+    for (const dirPath of dirPaths) {
+      sender.send("dir:listTxtFiles:scan", {
+        phase: "start",
+        dirPath,
+      } satisfies { phase: "start"; dirPath: string });
+      const batch = await collectTxtFilesUnderRoot(dirPath, (item) => {
         sender.send("dir:listTxtFiles:scan", {
           phase: "progress",
           name: item.name,
         } satisfies { phase: "progress"; name: string });
-      })
-    ).sort((a, b) => a.name.localeCompare(b.name, "zh-Hans-CN"));
+      });
+      for (const f of batch) {
+        byPath.set(f.path, f);
+      }
+    }
 
-    return { dirPath, files };
+    const files = Array.from(byPath.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, "zh-Hans-CN"),
+    );
+
+    return { dirPaths, files };
   });
 
   ipcMain.removeHandler("dialog:confirmClearRecentFiles");
@@ -290,7 +299,7 @@ export function registerMainIpcHandlers(
       defaultId: 1,
       cancelId: 0,
       message: "是否要清空文件列表？",
-      detail: "不会关闭当前正在阅读的文本。",
+      detail: "不会关闭当前正在阅读的文件。",
       noLink: true,
     };
     const result = win

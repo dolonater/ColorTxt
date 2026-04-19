@@ -169,6 +169,9 @@ function onBindListRef(value: Element | ComponentPublicInstance | null) {
   flex: 1;
   min-width: 0;
   text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sidebarTabFooterAction {
   flex-shrink: 0;

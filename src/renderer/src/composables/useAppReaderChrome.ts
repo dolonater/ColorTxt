@@ -60,7 +60,7 @@ export function useAppReaderChrome(deps: { readerRef: ReaderRef }) {
   const showFullscreenSidebar = ref(false);
   const fullscreenSidebarOverlayRef = ref<HTMLElement | null>(null);
 
-  const sidebarWidth = ref(250);
+  const sidebarWidth = ref(270);
   /** 全屏专用侧栏宽度；非全屏为 null（退出全屏时销毁，窗口态仍用 sidebarWidth） */
   const fullscreenSidebarWidth = ref<number | null>(null);
   const resizingSidebar = ref(false);

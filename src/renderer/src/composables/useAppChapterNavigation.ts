@@ -9,6 +9,7 @@ import {
 } from "../chapter";
 import { pickActiveChapterIdx } from "../reader/chapterIndex";
 import { countCharsForLine } from "../utils/format";
+import type { TxtFileItem } from "../services/fileListService";
 import type { useTxtStreamPipeline } from "./useTxtStreamPipeline";
 
 type Stream = ReturnType<typeof useTxtStreamPipeline>;
@@ -47,6 +48,7 @@ export function useAppChapterNavigation(deps: {
       restorePhysicalLine?: number;
       skipRememberCurrent?: boolean;
       keepSidebarTab?: boolean;
+      listRow?: TxtFileItem;
     },
   ) => Promise<boolean>;
 }) {

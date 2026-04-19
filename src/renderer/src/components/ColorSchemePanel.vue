@@ -228,6 +228,8 @@ watch(activeTab, (tab) => {
     title="配色"
     max-width="720px"
     panel-class="colorSchemePanel"
+    :mask-closable="false"
+    :esc-closable="true"
     :body-scroll="false"
   >
     <div class="colorSchemeLayout">

@@ -20,8 +20,12 @@ export {
   GITHUB_RELEASES_LATEST_URL,
 } from "@shared/packageDerived";
 
-export const defaultReaderIdleHint = "拖放目录或 .txt 文件到窗口";
+export const fileListEmptyHint = "无文件";
+export const fileListDropHint = "（拖放目录或 .txt 文件到这里）";
+export const fileListNoMatchHint = "无匹配文件";
 
+export const defaultReaderIdleHint = "未打开文件";
+export const defaultReaderOpenHint = "（拖放 .txt 文件到窗口）";
 /** 已打开但解码后无正文的文件（如 0 字节） */
 export const emptyFileHintText = "文件已打开，但没有内容";
 
