@@ -267,21 +267,9 @@ function cancelManageModal() {
 }
 
 .manageCatNameInput {
-  box-sizing: border-box;
   width: 100%;
-  min-width: 0;
-  padding: 6px 8px;
   font-size: 14px;
   line-height: 1.35;
-  color: var(--fg);
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-
-.manageCatNameInput::placeholder {
-  color: var(--fg);
-  opacity: 0.45;
 }
 
 .hlColPicker {
