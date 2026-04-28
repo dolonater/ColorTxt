@@ -29,6 +29,7 @@ const props = defineProps<{
   fullscreenReaderWidthPercent: number;
   readerFontSize: number;
   readerLineHeightMultiple: number;
+  monacoSmoothScrolling: boolean;
   compressBlankKeepOneBlank: boolean;
   monacoCustomHighlight: boolean;
   txtrDelimitedMatchCrossLine: boolean;
@@ -160,6 +161,7 @@ onBeforeUnmount(() => {
     :fullscreen-reader-width-percent="fullscreenReaderWidthPercent"
     :reader-font-size="readerFontSize"
     :reader-line-height-multiple="readerLineHeightMultiple"
+    :monaco-smooth-scrolling="monacoSmoothScrolling"
     :compress-blank-keep-one-blank="compressBlankKeepOneBlank"
     :monaco-custom-highlight="monacoCustomHighlight"
     :txtr-delimited-match-cross-line="txtrDelimitedMatchCrossLine"

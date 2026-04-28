@@ -308,6 +308,36 @@ export function registerMainIpcHandlers(
     return result.response === 1;
   });
 
+  ipcMain.removeHandler("dialog:confirmClearFileListCategory");
+  ipcMain.handle(
+    "dialog:confirmClearFileListCategory",
+    async (evt, payload: { categoryLabel: string; count: number }) => {
+      const win = BrowserWindow.fromWebContents(evt.sender);
+      const label =
+        typeof payload?.categoryLabel === "string" && payload.categoryLabel.trim()
+          ? payload.categoryLabel.trim()
+          : "当前分类";
+      const n =
+        typeof payload?.count === "number" && Number.isFinite(payload.count)
+          ? Math.max(0, Math.floor(payload.count))
+          : 0;
+      const options: MessageBoxOptions = {
+        type: "warning",
+        title: APP_DISPLAY_NAME,
+        buttons: ["取消", "清空分类"],
+        defaultId: 1,
+        cancelId: 0,
+        message: `是否从文件列表中移除「${label}」下的 ${n} 个文件？`,
+        detail: "不会关闭当前正在阅读的文件。",
+        noLink: true,
+      };
+      const result = win
+        ? await dialog.showMessageBox(win, options)
+        : await dialog.showMessageBox(options);
+      return result.response === 1;
+    },
+  );
+
   ipcMain.removeHandler("dialog:confirmClearBookmarks");
   ipcMain.handle("dialog:confirmClearBookmarks", async (evt) => {
     const win = BrowserWindow.fromWebContents(evt.sender);

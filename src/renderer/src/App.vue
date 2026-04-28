@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, provide, ref, useTemplateRef } from "vue";
+import { computed, provide, ref, useTemplateRef, watch } from "vue";
 import type { ComponentPublicInstance } from "vue";
 import { getChapterMatchRules, type Chapter } from "./chapter";
 import AppHeader, { type RecentFileItem } from "./components/AppHeader.vue";
@@ -37,6 +37,7 @@ import {
   defaultLeadIndentFullWidth,
   defaultMonacoAdvancedWrapping,
   defaultMonacoCustomHighlight,
+  defaultMonacoSmoothScrolling,
   defaultReaderIdleHint,
   defaultReaderOpenHint,
   defaultReaderFontSize,
@@ -255,6 +256,8 @@ const restoreSessionOnStartup = ref(defaultRestoreSessionOnStartup);
 const recentFilesHistoryLimit = ref(defaultRecentFilesHistoryLimit);
 /** Monaco wrappingStrategy：advanced 换行更优、更重 */
 const monacoAdvancedWrapping = ref(defaultMonacoAdvancedWrapping);
+/** Monaco 阅读区平滑滚动（设置可关） */
+const monacoSmoothScrolling = ref(defaultMonacoSmoothScrolling);
 /** 全屏时阅读区域宽度（百分比） */
 const fullscreenReaderWidthPercent = ref(defaultFullscreenReaderWidthPercent);
 /** 电子书转换缓存目录；默认 userData/ConvertedTxt；设置里清空则为与源文件同目录 */
@@ -382,6 +385,9 @@ const stream = useTxtStreamPipeline({
   afterFullTextInstalled: () => afterStreamFullTextInstalled(),
 });
 
+/** 侧栏文件列表是否处于编辑模式；编辑中不写文件列表缓存，退出时再落盘 */
+const fileListEditing = ref(false);
+
 const persistence = useAppPersistence({
   readerRef,
   stream,
@@ -407,6 +413,7 @@ const persistence = useAppPersistence({
   restoreSessionOnStartup,
   recentFilesHistoryLimit,
   monacoAdvancedWrapping,
+  monacoSmoothScrolling,
   fullscreenReaderWidthPercent,
   fileMetaRecords,
   shortcutBindings,
@@ -419,6 +426,7 @@ const persistence = useAppPersistence({
   fileCategory,
   fileSort,
   fileCategoryCatalog,
+  fileListEditing,
 });
 const {
   persistSettings,
@@ -435,6 +443,12 @@ const {
   clearPersistedSession,
   metaProgressByPathKey,
 } = persistence;
+
+watch(fileListEditing, (editing, wasEditing) => {
+  if (wasEditing === true && editing === false) {
+    persistFileListCache();
+  }
+});
 
 /** 加载期底栏/侧栏：当前文件的存档进度仅来自 file.meta */
 const archivedProgressForCurrentFile = computed(() => {
@@ -473,13 +487,22 @@ function onPersistUi() {
 function onSetFilesCategory(paths: string[], category: string) {
   const set = new Set(paths);
   const cat = category.trim() ? category.trim() : undefined;
-  txtFiles.value = txtFiles.value.map((f) => {
-    if (!set.has(f.path)) return f;
-    if (cat) return { ...f, category: cat };
-    const { category: _drop, ...rest } = f;
-    return rest as TxtFileItem;
-  });
-  persistFileListCache();
+  const list = txtFiles.value;
+  for (let i = 0; i < list.length; i++) {
+    const f = list[i]!;
+    if (!set.has(f.path)) continue;
+    if (cat) {
+      if (f.category === cat) continue;
+      /** 原地改 `category`，保持对象引用，减少分配且仍能触发深度响应更新 */
+      f.category = cat;
+    } else {
+      if (f.category === undefined) continue;
+      delete f.category;
+    }
+  }
+  if (!fileListEditing.value) {
+    persistFileListCache();
+  }
 }
 
 /** 侧栏筛选为具体分类时，新加入列表的文件自动归入该分类 */
@@ -514,7 +537,9 @@ function onApplyCategoryCatalog(payload: {
   ) {
     fileCategory.value = FILE_CATEGORY_FILTER_ALL;
   }
-  persistFileListCache();
+  if (!fileListEditing.value) {
+    persistFileListCache();
+  }
   persistSettings();
 }
 
@@ -621,6 +646,7 @@ const fileSession = useAppFileSession({
 
 const {
   clearFileList,
+  clearFileListForCategory,
   removeFileList,
   closeCurrentFile,
   openFileViaDialog,
@@ -827,6 +853,7 @@ function onHeaderHighlightMenuOpen(open: boolean) {
 
 function applySettings(payload: SettingsApplyPayload) {
   const prevCompressBlankKeepOneBlank = compressBlankKeepOneBlank.value;
+  monacoSmoothScrolling.value = payload.monacoSmoothScrolling;
   compressBlankKeepOneBlank.value = payload.compressBlankKeepOneBlank;
   txtrDelimitedMatchCrossLine.value = payload.txtrDelimitedMatchCrossLine;
   restoreSessionOnStartup.value = payload.restoreSessionOnStartup;
@@ -1103,6 +1130,7 @@ useAppShellThemeWatch({
           @open-file="openFileFromSidebar"
           @jump-to-chapter="jumpToChapter"
           @clear-file-list="clearFileList"
+          @clear-file-list-category="clearFileListForCategory"
           @remove-file-list="removeFileList"
           @close-current-file="closeCurrentFile"
           @jump-to-bookmark="jumpToBookmark"
@@ -1118,6 +1146,7 @@ useAppShellThemeWatch({
           @update:fullscreen-file-list-popovers-open="
             fullscreenFileListPopoversOpen = $event
           "
+          @update:file-list-editing="fileListEditing = $event"
         />
         <!-- 放在侧栏容器内，避免移到拖条时触发 @mouseleave 导致全屏侧栏收起 -->
         <div
@@ -1154,6 +1183,7 @@ useAppShellThemeWatch({
           :txtr-delimited-match-cross-line="txtrDelimitedMatchCrossLine"
           :compress-blank-lines="compressBlankLines"
           :monaco-advanced-wrapping="monacoAdvancedWrapping"
+          :monaco-smooth-scrolling="monacoSmoothScrolling"
           :stream-loading="loading"
           :reader-surface-light="readerSurfaceLight"
           :reader-surface-dark="readerSurfaceDark"
@@ -1247,6 +1277,7 @@ useAppShellThemeWatch({
       :reader-font-size="readerFontSize"
       :reader-line-height-multiple="readerLineHeightMultiple"
       :compress-blank-keep-one-blank="compressBlankKeepOneBlank"
+      :monaco-smooth-scrolling="monacoSmoothScrolling"
       :monaco-custom-highlight="monacoCustomHighlight"
       :txtr-delimited-match-cross-line="txtrDelimitedMatchCrossLine"
       :chapter-rules="chapterRuleState.rules"

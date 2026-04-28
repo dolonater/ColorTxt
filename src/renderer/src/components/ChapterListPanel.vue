@@ -67,7 +67,7 @@ function onBindListRef(value: Element | ComponentPublicInstance | null) {
       >
       <button
         type="button"
-        class="link hoverDanger sidebarTabFooterAction"
+        class="link danger hoverMode sidebarTabFooterAction"
         @click="emit('closeCurrentFile')"
       >
         关闭文件

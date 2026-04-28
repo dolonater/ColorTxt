@@ -54,6 +54,7 @@ import {
   defaultCompressBlankLines,
   defaultMonacoAdvancedWrapping,
   defaultMonacoCustomHighlight,
+  defaultMonacoSmoothScrolling,
   defaultTxtrDelimitedMatchCrossLine,
   defaultReaderLineHeightMultiple,
   defaultReaderPaletteDark,
@@ -145,6 +146,8 @@ const props = withDefaults(
     compressBlankLines?: boolean;
     /** Monaco 高级换行策略（wrappingStrategy: advanced） */
     monacoAdvancedWrapping?: boolean;
+    /** Monaco 平滑滚动（滚轮、revealLine、setScrollTop 等） */
+    monacoSmoothScrolling?: boolean;
     /** 主进程流式读盘期间为 true；关闭 sticky 避免旧文件黏性标题在加载全程残留 */
     streamLoading?: boolean;
     /** 合并用户覆盖后的阅读器表面色（亮色 / 暗色） */
@@ -170,6 +173,7 @@ const props = withDefaults(
     txtrDelimitedMatchCrossLine: defaultTxtrDelimitedMatchCrossLine,
     compressBlankLines: defaultCompressBlankLines,
     monacoAdvancedWrapping: defaultMonacoAdvancedWrapping,
+    monacoSmoothScrolling: defaultMonacoSmoothScrolling,
     streamLoading: false,
     readerSurfaceLight: () => ({ ...defaultReaderPaletteLight }),
     readerSurfaceDark: () => ({ ...defaultReaderPaletteDark }),
@@ -469,6 +473,13 @@ watch(
   },
 );
 
+watch(
+  () => props.monacoSmoothScrolling,
+  (on) => {
+    editor.value?.updateOptions({ smoothScrolling: on });
+  },
+);
+
 function syncStickyScrollToStreamState() {
   const ed = editor.value;
   if (!ed) return;
@@ -492,6 +503,13 @@ function beginProgrammaticScroll() {
   window.setTimeout(() => {
     programmaticScrollDepth = Math.max(0, programmaticScrollDepth - 1);
   }, 500);
+}
+
+/** 与设置「平滑滚动」一致：关闭时一律立即滚动 */
+function monacoScrollType(wantSmooth: boolean): monaco.editor.ScrollType {
+  return wantSmooth && props.monacoSmoothScrolling
+    ? monaco.editor.ScrollType.Smooth
+    : monaco.editor.ScrollType.Immediate;
 }
 
 /** App 传入的主题名（vs / vs-dark），用于切换语法着色后重设 Monaco 主题 */
@@ -887,12 +905,12 @@ function resetToTop() {
   if (!e) return;
   beginProgrammaticScroll();
   e.setPosition({ lineNumber: 1, column: 1 });
-  e.revealLineInCenter(1, monaco.editor.ScrollType.Smooth);
-  e.setScrollTop(0, monaco.editor.ScrollType.Smooth);
+  e.revealLineInCenter(1, monacoScrollType(true));
+  e.setScrollTop(0, monacoScrollType(true));
   queueMicrotask(() => {
     try {
       e.setPosition({ lineNumber: 1, column: 1 });
-      e.setScrollTop(0, monaco.editor.ScrollType.Smooth);
+      e.setScrollTop(0, monacoScrollType(true));
     } catch {
       // ignore
     }
@@ -908,9 +926,7 @@ function scrollToDocumentStart(smooth = false) {
   const m = model.value;
   if (!e || !m) return;
   beginProgrammaticScroll();
-  const scrollType = smooth
-    ? monaco.editor.ScrollType.Smooth
-    : monaco.editor.ScrollType.Immediate;
+  const scrollType = monacoScrollType(smooth);
   e.layout();
   e.setScrollTop(0, scrollType);
   e.setPosition({ lineNumber: 1, column: 1 });
@@ -927,9 +943,7 @@ function jumpToLine(lineNumber: number, smooth = true) {
     1,
     Math.min(Math.floor(lineNumber), Math.max(1, lineCount)),
   );
-  const scrollType = smooth
-    ? monaco.editor.ScrollType.Smooth
-    : monaco.editor.ScrollType.Immediate;
+  const scrollType = monacoScrollType(smooth);
   e.layout();
   e.revealLineNearTop(line, scrollType);
   const top = e.getTopForLineNumber(line);
@@ -954,9 +968,7 @@ function jumpToBookmarkLine(lineNumber: number, smooth = true) {
     1,
     Math.min(Math.floor(lineNumber), Math.max(1, lineCount)),
   );
-  const scrollType = smooth
-    ? monaco.editor.ScrollType.Smooth
-    : monaco.editor.ScrollType.Immediate;
+  const scrollType = monacoScrollType(smooth);
   const lineHeightPx = e.getOption(monaco.editor.EditorOption.lineHeight);
   e.layout();
   e.revealLineNearTop(line, scrollType);
@@ -1161,7 +1173,7 @@ function scrollByDeltaY(deltaY: number) {
   if (!e || !Number.isFinite(deltaY) || deltaY === 0) return;
   const maxTop = Math.max(0, e.getScrollHeight() - e.getLayoutInfo().height);
   const nextTop = Math.max(0, Math.min(maxTop, e.getScrollTop() + deltaY));
-  e.setScrollTop(nextTop, monaco.editor.ScrollType.Smooth);
+  e.setScrollTop(nextTop, monacoScrollType(true));
 }
 
 /**
@@ -1205,12 +1217,7 @@ function scrollToBottom(smooth = false) {
   if (!e) return;
   beginProgrammaticScroll();
   const maxTop = Math.max(0, e.getScrollHeight() - e.getLayoutInfo().height);
-  e.setScrollTop(
-    maxTop,
-    smooth
-      ? monaco.editor.ScrollType.Smooth
-      : monaco.editor.ScrollType.Immediate,
-  );
+  e.setScrollTop(maxTop, monacoScrollType(smooth));
 }
 
 /**
@@ -1260,12 +1267,7 @@ function scrollToScrollTop(scrollTop: number, smooth = true) {
   beginProgrammaticScroll();
   const maxTop = Math.max(0, e.getScrollHeight() - e.getLayoutInfo().height);
   const target = Math.max(0, Math.min(maxTop, scrollTop));
-  e.setScrollTop(
-    target,
-    smooth
-      ? monaco.editor.ScrollType.Smooth
-      : monaco.editor.ScrollType.Immediate,
-  );
+  e.setScrollTop(target, monacoScrollType(smooth));
   e.focus();
 }
 
@@ -1285,12 +1287,7 @@ function scrollLineToBottom(lineNumber: number, smooth = false) {
     line >= lineCount ? e.getScrollHeight() : e.getTopForLineNumber(line + 1);
   const maxTop = Math.max(0, e.getScrollHeight() - layoutH);
   const targetTop = Math.max(0, Math.min(maxTop, lineBottomPx - layoutH));
-  e.setScrollTop(
-    targetTop,
-    smooth
-      ? monaco.editor.ScrollType.Smooth
-      : monaco.editor.ScrollType.Immediate,
-  );
+  e.setScrollTop(targetTop, monacoScrollType(smooth));
   e.setPosition({ lineNumber: line, column: 1 });
 }
 
@@ -1485,6 +1482,7 @@ onMounted(() => {
       lineHeightMultiple,
       fontFamily: currentFontFamily,
       wrappingStrategyAdvanced: props.monacoAdvancedWrapping,
+      smoothScrolling: props.monacoSmoothScrolling,
     }),
   });
   chapterTitleDecorationsCollection.value =

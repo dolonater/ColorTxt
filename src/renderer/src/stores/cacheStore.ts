@@ -44,6 +44,8 @@ export type PersistedSettingsData = {
   recentFilesHistoryLimit?: number;
   /** Monaco 换行是否使用 advanced 策略（性能开销更大） */
   monacoAdvancedWrapping?: boolean;
+  /** Monaco 阅读区平滑滚动（滚轮、程序性 setScrollTop/revealLine 等） */
+  monacoSmoothScrolling?: boolean;
   /** 全屏时阅读区宽度（百分比） */
   fullscreenReaderWidthPercent?: number;
   /** 用户自定义快捷键（动作ID -> accelerator） */
@@ -172,6 +174,9 @@ export function loadPersistedSettingsData(
   }
   if (typeof obj.monacoAdvancedWrapping === "boolean") {
     data.monacoAdvancedWrapping = obj.monacoAdvancedWrapping;
+  }
+  if (typeof obj.monacoSmoothScrolling === "boolean") {
+    data.monacoSmoothScrolling = obj.monacoSmoothScrolling;
   }
   if (
     typeof obj.fullscreenReaderWidthPercent === "number" &&

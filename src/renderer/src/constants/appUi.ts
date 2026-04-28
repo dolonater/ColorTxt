@@ -96,6 +96,8 @@ export const defaultReaderFontSize = 24;
 export const defaultReaderLineHeightMultiple = 1.5;
 export const defaultRestoreSessionOnStartup = true;
 export const defaultMonacoAdvancedWrapping = false;
+/** Monaco 阅读区：滚轮/跳转等是否使用平滑滚动动画 */
+export const defaultMonacoSmoothScrolling = true;
 
 /** 默认「最近打开」条数上限（可被设置覆盖） */
 export const defaultRecentFilesHistoryLimit = 20;

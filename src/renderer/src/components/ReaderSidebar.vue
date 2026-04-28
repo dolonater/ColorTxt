@@ -73,6 +73,7 @@ const emit = defineEmits<{
   jumpToChapter: [chapter: Chapter];
   jumpToBookmark: [line: number];
   clearFileList: [];
+  clearFileListCategory: [categoryFilter: string];
   removeFileList: [filePaths: string[]];
   closeCurrentFile: [];
   clearBookmarks: [];
@@ -89,6 +90,7 @@ const emit = defineEmits<{
   ];
   setFilesCategory: [paths: string[], category: string];
   "update:fullscreenFileListPopoversOpen": [open: boolean];
+  "update:fileListEditing": [editing: boolean];
 }>();
 
 const {
@@ -197,12 +199,14 @@ defineExpose({
       "
       @open-file="(item: SidebarFileItem) => emit('openFile', item)"
       @clear-file-list="emit('clearFileList')"
+      @clear-file-list-category="emit('clearFileListCategory', $event)"
       @remove-file-list="emit('removeFileList', $event)"
       @import-dropped-paths="emit('importDroppedPaths', $event)"
       @bind-list-ref="bindFileListRef"
       @update:fullscreen-file-list-popovers-open="
         emit('update:fullscreenFileListPopoversOpen', $event)
       "
+      @update:file-list-editing="emit('update:fileListEditing', $event)"
     />
     <BookmarkListPanel
       v-show="activeTab === 'bookmarks'"

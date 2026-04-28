@@ -131,6 +131,7 @@ export function useAppPersistence(deps: {
   restoreSessionOnStartup: Ref<boolean>;
   recentFilesHistoryLimit: Ref<number>;
   monacoAdvancedWrapping: Ref<boolean>;
+  monacoSmoothScrolling: Ref<boolean>;
   fullscreenReaderWidthPercent: Ref<number>;
   fileMetaRecords: Ref<FileMetaRecord[]>;
   shortcutBindings: Ref<ShortcutBindingMap>;
@@ -144,6 +145,8 @@ export function useAppPersistence(deps: {
   fileCategory: Ref<string>;
   fileSort: Ref<FileSortMode>;
   fileCategoryCatalog: Ref<FileCategoryDefinition[]>;
+  /** 侧栏文件列表「编辑」模式：为 true 时跳过文件列表 localStorage 写入，退出并保存时由 App 再落盘 */
+  fileListEditing: Ref<boolean>;
 }) {
   const settingsLoaded = ref(false);
 
@@ -229,7 +232,8 @@ export function useAppPersistence(deps: {
     }
   })();
 
-  function persistFileListCache() {
+  function persistFileListCache(opts?: { force?: boolean }) {
+    if (deps.fileListEditing.value && !opts?.force) return;
     const next = deps.txtFiles.value as TxtFileItem[];
     let json: string;
     try {
@@ -583,6 +587,9 @@ export function useAppPersistence(deps: {
     if (typeof data.monacoAdvancedWrapping === "boolean") {
       deps.monacoAdvancedWrapping.value = data.monacoAdvancedWrapping;
     }
+    if (typeof data.monacoSmoothScrolling === "boolean") {
+      deps.monacoSmoothScrolling.value = data.monacoSmoothScrolling;
+    }
     if (
       typeof data.fullscreenReaderWidthPercent === "number" &&
       Number.isFinite(data.fullscreenReaderWidthPercent)
@@ -677,6 +684,7 @@ export function useAppPersistence(deps: {
       restoreSessionOnStartup: deps.restoreSessionOnStartup.value,
       recentFilesHistoryLimit: recentLimit(),
       monacoAdvancedWrapping: deps.monacoAdvancedWrapping.value,
+      monacoSmoothScrolling: deps.monacoSmoothScrolling.value,
       fullscreenReaderWidthPercent: deps.fullscreenReaderWidthPercent.value,
       shortcutBindings: deps.shortcutBindings.value,
       readerPaletteOverridesLight:
@@ -739,7 +747,7 @@ export function useAppPersistence(deps: {
       return;
     }
     persistReadingSessionSnapshot();
-    persistFileListCache();
+    persistFileListCache({ force: true });
     flushRecentFilesAndFileMetaToDisk();
   }
 

@@ -127,7 +127,7 @@ function onContextMenuSelect(actionId: string) {
       >
       <button
         type="button"
-        class="link hoverDanger sidebarTabFooterAction"
+        class="link danger hoverMode sidebarTabFooterAction"
         :disabled="sortedBookmarks.length === 0"
         @click="emit('clearBookmarks')"
       >

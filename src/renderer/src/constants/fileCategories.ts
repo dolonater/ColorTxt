@@ -66,6 +66,37 @@ export function normalizeCategoryFilter(
   return x;
 }
 
+/** 与侧栏 `filesByCategory` 一致：trim 后非空为已分类，否则为未分类 */
+export function effectiveFileListItemCategory(category: string | undefined): string {
+  return (category ?? "").trim();
+}
+
+/** 返回当前筛选下应从列表移除的文件路径（不含「全部」语义以外的用途时勿传 `__all__`） */
+export function filePathsMatchingCategoryFilter(
+  files: readonly { path: string; category?: string }[],
+  categoryFilter: string,
+): string[] {
+  const f = normalizeCategoryFilter(categoryFilter);
+  if (f === FILE_CATEGORY_FILTER_ALL) {
+    return files.map((x) => x.path);
+  }
+  if (f === FILE_CATEGORY_FILTER_UNCATEGORIZED) {
+    return files
+      .filter((x) => !effectiveFileListItemCategory(x.category))
+      .map((x) => x.path);
+  }
+  return files
+    .filter((x) => effectiveFileListItemCategory(x.category) === f)
+    .map((x) => x.path);
+}
+
+/** 确认框等 UI：筛选器的人读名称 */
+export function displayNameForCategoryFilter(categoryFilter: string): string {
+  const f = normalizeCategoryFilter(categoryFilter);
+  if (f === FILE_CATEGORY_FILTER_UNCATEGORIZED) return "未分类";
+  return f;
+}
+
 export function cloneDefaultFileCategoryCatalog(): FileCategoryDefinition[] {
   return DEFAULT_FILE_CATEGORY_CATALOG.map((c) => ({ ...c }));
 }

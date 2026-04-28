@@ -24,6 +24,10 @@ import { useFileListMenus } from "../composables/useFileListMenus";
 import { useFileListSelection } from "../composables/useFileListSelection";
 import type { FileCategoryDefinition } from "../constants/fileCategories";
 import type { FileSortMode } from "../constants/fileCategories";
+import {
+  FILE_CATEGORY_FILTER_ALL,
+  normalizeCategoryFilter,
+} from "../constants/fileCategories";
 import type { CategoryEditorRow } from "../constants/fileCategories";
 import {
   borderColorForFile,
@@ -78,8 +82,10 @@ const emit = defineEmits<{
   openFile: [item: SidebarFileItem];
   importDroppedPaths: [paths: string[]];
   clearFileList: [];
+  clearFileListCategory: [categoryFilter: string];
   removeFileList: [filePaths: string[]];
   bindListRef: [value: InstanceType<typeof VirtualList> | null];
+  "update:fileListEditing": [editing: boolean];
 }>();
 
 function fileRowProgress(filePath: string): number | undefined {
@@ -136,6 +142,26 @@ const {
   onSortSelect,
 } = useFileListCategorySort(props, emit);
 
+const isFileCategoryFilterAll = computed(
+  () => normalizeCategoryFilter(props.fileCategory) === FILE_CATEGORY_FILTER_ALL,
+);
+
+const clearFileListFooterDisabled = computed(() => {
+  if (props.fileFilterQuery.trim()) return true;
+  if (!isFileCategoryFilterAll.value && props.filesFiltered.length === 0) {
+    return true;
+  }
+  return false;
+});
+
+function onClearFileListFooterClick() {
+  if (isFileCategoryFilterAll.value) {
+    emit("clearFileList");
+    return;
+  }
+  emit("clearFileListCategory", props.fileCategory);
+}
+
 const listFocusEl = useTemplateRef<HTMLElement>("listFocusEl");
 const footerCategoryBtnRef = useTemplateRef<HTMLButtonElement>(
   "footerCategoryBtnRef",
@@ -155,6 +181,12 @@ const {
   enterEditFileListMode,
   onRemoveSelectedFileListItems,
 } = selection;
+
+watch(
+  isEditingFileList,
+  (v) => emit("update:fileListEditing", v),
+  { immediate: true },
+);
 
 const menus = reactive(
   useFileListMenus(emit, {
@@ -575,6 +607,7 @@ function onFileListDrop(ev: DragEvent) {
         v-if="!isEditingFileList"
         type="button"
         class="link sidebarTabFooterAction"
+        :disabled="filesFiltered.length === 0"
         @click="enterEditFileListMode"
       >
         编辑
@@ -582,11 +615,11 @@ function onFileListDrop(ev: DragEvent) {
       <button
         v-if="!isEditingFileList"
         type="button"
-        class="link hoverDanger sidebarTabFooterAction"
-        :disabled="!!fileFilterQuery.trim()"
-        @click="emit('clearFileList')"
+        class="link danger hoverMode sidebarTabFooterAction"
+        :disabled="clearFileListFooterDisabled"
+        @click="onClearFileListFooterClick"
       >
-        清空
+        {{ isFileCategoryFilterAll ? "清空" : "清空分类" }}
       </button>
       <template v-if="isEditingFileList">
         <button
@@ -608,10 +641,10 @@ function onFileListDrop(ev: DragEvent) {
         </button>
         <button
           type="button"
-          class="link sidebarTabFooterAction"
+          class="link success sidebarTabFooterAction"
           @click="menus.exitEditFileListMode"
         >
-          退出编辑
+          保存
         </button>
       </template>
     </div>

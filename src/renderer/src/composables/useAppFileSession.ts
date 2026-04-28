@@ -20,6 +20,13 @@ import { useAppChapterListSync } from "./useAppChapterListSync";
 import { useTxtStreamPipeline } from "./useTxtStreamPipeline";
 import type { Chapter } from "../chapter";
 import { sessionKey, fileListKey } from "../constants/appUi";
+import {
+  FILE_CATEGORY_FILTER_ALL,
+  displayNameForCategoryFilter,
+  filePathsMatchingCategoryFilter,
+  normalizeCategoryFilter,
+} from "../constants/fileCategories";
+import { fileHistoryKey } from "../stores/recentHistoryStore";
 
 /** 等浏览器下一帧再续，让 Monaco 在空文档上完成绘制，避免黏性章节标题滞留 */
 function waitNextPaintFrame(): Promise<void> {
@@ -103,15 +110,50 @@ export function useAppFileSession(deps: {
   const { pulseFileListCenter, suppressFileListCenterAfterLoad } =
     deps.chapterSync;
 
-  async function resolvePhysicalTextForOpen(
-    filePath: string,
-    preparedSize: number | null,
-  ): Promise<
+  /**
+   * 打开文件后再写回侧栏 `size`，避免与首帧流式加载抢主线程；无变更则 no-op。
+   */
+  function scheduleDeferredFileListSizeSync(
+    sessionPath: string,
+    listSizeBytes: number,
+  ) {
+    const run = () => {
+      const wantKey = fileHistoryKey(sessionPath);
+      const list = deps.txtFiles.value;
+      const idx = list.findIndex((f) => fileHistoryKey(f.path) === wantKey);
+      if (idx < 0) return;
+      const cur = list[idx]!;
+      if (cur.size === listSizeBytes) return;
+      const next = list.slice();
+      next[idx] = normalizeTxtFileItem({ ...cur, size: listSizeBytes });
+      deps.txtFiles.value = next;
+      persistFileListCache();
+    };
+
+    const ric = (
+      globalThis as typeof globalThis & {
+        requestIdleCallback?: (
+          cb: () => void,
+          opts?: { timeout: number },
+        ) => number;
+      }
+    ).requestIdleCallback;
+    if (typeof ric === "function") {
+      ric(() => run(), { timeout: 2000 });
+    } else {
+      setTimeout(run, 0);
+    }
+  }
+
+  async function resolvePhysicalTextForOpen(filePath: string): Promise<
     | {
         ok: true;
         physicalPath: string;
         sessionFilePath?: string;
+        /** 底栏等：实际读取的文本字节数（电子书为转换结果 .txt） */
         displaySize: number;
+        /** 与侧栏列表项 `path`（会话路径）一致时的磁盘字节数：纯文本即本文件；电子书为源书文件 */
+        listSizeAtSessionPath: number;
       }
     | { ok: false; message: string }
   > {
@@ -124,7 +166,8 @@ export function useAppFileSession(deps: {
         return {
           ok: true,
           physicalPath: filePath,
-          displaySize: preparedSize ?? st.size,
+          displaySize: st.size,
+          listSizeAtSessionPath: st.size,
         };
       } catch {
         return { ok: false, message: `文件不存在或不可访问：${filePath}` };
@@ -174,6 +217,7 @@ export function useAppFileSession(deps: {
         physicalPath: colorTxtPath,
         sessionFilePath: filePath,
         displaySize: tst.size,
+        listSizeAtSessionPath: st.size,
       };
     } catch (e) {
       return {
@@ -202,6 +246,23 @@ export function useAppFileSession(deps: {
     if (!confirmed) return;
     deps.txtFiles.value = [];
     persistFileListCache();
+  }
+
+  async function clearFileListForCategory(categoryFilter: string) {
+    if (!window.colorTxt) return;
+    const norm = normalizeCategoryFilter(categoryFilter);
+    if (norm === FILE_CATEGORY_FILTER_ALL) {
+      await clearFileList();
+      return;
+    }
+    const paths = filePathsMatchingCategoryFilter(deps.txtFiles.value, norm);
+    if (paths.length === 0) return;
+    const confirmed = await window.colorTxt.confirmClearFileListCategory({
+      categoryLabel: displayNameForCategoryFilter(norm),
+      count: paths.length,
+    });
+    if (!confirmed) return;
+    removeFileList(paths);
   }
 
   function removeFileList(filePaths: string[]) {
@@ -327,7 +388,7 @@ export function useAppFileSession(deps: {
         return;
       }
       clearReaderBeforeResolve();
-      const resolved = await resolvePhysicalTextForOpen(path, st.size);
+      const resolved = await resolvePhysicalTextForOpen(path);
       if (!resolved.ok) {
         deps.sidebarTab.value = "files";
         return;
@@ -365,6 +426,7 @@ export function useAppFileSession(deps: {
       resetSession(path);
       deps.physicalReaderPath.value = resolved.physicalPath;
       deps.currentFileSize.value = resolved.displaySize;
+      scheduleDeferredFileListSizeSync(path, resolved.listSizeAtSessionPath);
       deps.sidebarTab.value = "chapters";
       await waitNextPaintFrame();
       window.colorTxt.streamFile(resolved.physicalPath, {
@@ -550,10 +612,7 @@ export function useAppFileSession(deps: {
       return false;
     }
 
-    const resolved = await resolvePhysicalTextForOpen(
-      filePath,
-      prepared.fileSize,
-    );
+    const resolved = await resolvePhysicalTextForOpen(filePath);
     if (!resolved.ok) {
       await appAlert(resolved.message);
       removeRecentFile(filePath);
@@ -603,6 +662,7 @@ export function useAppFileSession(deps: {
     resetSession(filePath);
     deps.physicalReaderPath.value = resolved.physicalPath;
     deps.currentFileSize.value = resolved.displaySize;
+    scheduleDeferredFileListSizeSync(filePath, resolved.listSizeAtSessionPath);
     if (!options?.keepSidebarTab) {
       deps.sidebarTab.value = "chapters";
     }
@@ -631,6 +691,7 @@ export function useAppFileSession(deps: {
     restoreFileListFromSession,
     centerFileListIfCurrentInList,
     clearFileList,
+    clearFileListForCategory,
     removeFileList,
     closeCurrentFile,
     rememberCurrentFileLine,

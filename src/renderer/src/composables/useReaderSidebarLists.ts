@@ -76,6 +76,13 @@ function effectiveCategoryName(f: SidebarFileItem): string {
   return c;
 }
 
+/** `category` 已是展示用 trim 结果（无首尾空白），可与 `fileRowsEnriched` 复用源对象引用 */
+function categoryFieldAlreadyTrimmed(f: TxtFileItem): boolean {
+  const c = f.category;
+  if (c === undefined) return true;
+  return typeof c === "string" && c === c.trim();
+}
+
 function comparePathKey(a: string, b: string): number {
   return normalizeFileMetaPathKey(a).localeCompare(normalizeFileMetaPathKey(b));
 }
@@ -237,23 +244,38 @@ export function useReaderSidebarLists(
   /**
    * 分类来自列表项 `TxtFileItem.category`；（按需）合并打开时间快照。
    * **不**合并 `metaProgressByPathKey` / 实时进度，避免滚动时整表 `.map` 与下游 watcher 连锁。
+   * 分类字段已规范化的行复用源对象引用，减轻「只改少数项分类」时的分配与下游重算。
    */
   const fileRowsEnriched = computed((): SidebarFileItem[] => {
     const list = props.files;
     const sortMode = props.fileSort ?? "nameAsc";
     const needLastRead =
       sortMode === "lastReadAtAsc" || sortMode === "lastReadAtDesc";
-    return list.map((f) => {
+    const snap = openedAtSortSnapshot.value;
+    const n = list.length;
+    const out: SidebarFileItem[] = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const f = list[i]!;
       const key = fileHistoryKey(f.path);
-      const row: SidebarFileItem = {
-        ...f,
-        category: (f.category ?? "").trim(),
-      };
       if (needLastRead) {
-        row.lastReadAt = openedAtSortSnapshot.value.get(key);
+        const lastAt = snap.get(key);
+        if (lastAt === undefined && categoryFieldAlreadyTrimmed(f)) {
+          out[i] = f as SidebarFileItem;
+        } else {
+          const trimmed = (f.category ?? "").trim();
+          const row: SidebarFileItem = categoryFieldAlreadyTrimmed(f)
+            ? { ...f }
+            : { ...f, category: trimmed };
+          if (lastAt !== undefined) row.lastReadAt = lastAt;
+          out[i] = row;
+        }
+      } else if (categoryFieldAlreadyTrimmed(f)) {
+        out[i] = f as SidebarFileItem;
+      } else {
+        out[i] = { ...f, category: (f.category ?? "").trim() };
       }
-      return row;
-    });
+    }
+    return out;
   });
 
   const filesByCategory = computed(() => {

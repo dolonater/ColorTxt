@@ -24,6 +24,8 @@ export type ReaderEditorCreateOptionsInput = {
   theme?: string;
   /** Monaco `wrappingStrategy`：advanced 换行更优但更重 */
   wrappingStrategyAdvanced?: boolean;
+  /** Monaco `smoothScrolling`；与设置「平滑滚动」一致 */
+  smoothScrolling?: boolean;
 };
 
 /**
@@ -39,6 +41,7 @@ export function buildReaderEditorCreateOptions(
     fontFamily,
     theme = "vs",
     wrappingStrategyAdvanced = false,
+    smoothScrolling = true,
   } = input;
 
   return {
@@ -86,7 +89,7 @@ export function buildReaderEditorCreateOptions(
     wordBasedSuggestions: "off",
     wordWrap: "on",
     wrappingStrategy: wrappingStrategyAdvanced ? "advanced" : "simple",
-    smoothScrolling: true,
+    smoothScrolling,
     automaticLayout: true,
     stickyScroll: { enabled: true },
     contextmenu: false,

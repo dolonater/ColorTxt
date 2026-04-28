@@ -80,6 +80,14 @@ const api = {
     ipcRenderer.invoke("dialog:confirmClearRecentFiles") as Promise<boolean>,
   confirmClearFileList: () =>
     ipcRenderer.invoke("dialog:confirmClearFileList") as Promise<boolean>,
+  confirmClearFileListCategory: (payload: {
+    categoryLabel: string;
+    count: number;
+  }) =>
+    ipcRenderer.invoke(
+      "dialog:confirmClearFileListCategory",
+      payload,
+    ) as Promise<boolean>,
   confirmClearBookmarks: () =>
     ipcRenderer.invoke("dialog:confirmClearBookmarks") as Promise<boolean>,
   confirmClearAppCache: () =>

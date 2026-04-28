@@ -65,13 +65,16 @@ export function useFileListSelection(
   }
 
   function invertSelectionVisible() {
-    const visSet = new Set(visiblePaths());
+    const visible = visiblePaths();
+    const visSet = new Set(visible);
+    /** 用 Set 做成员判断，避免对每条可见项在超长选中数组上 O(n) 的 includes（几万项时接近平方级卡顿） */
+    const selectedSet = new Set(selectedFilePaths.value);
     const next: string[] = [];
     for (const p of selectedFilePaths.value) {
       if (!visSet.has(p)) next.push(p);
     }
-    for (const p of visiblePaths()) {
-      if (!selectedFilePaths.value.includes(p)) next.push(p);
+    for (const p of visible) {
+      if (!selectedSet.has(p)) next.push(p);
     }
     selectedFilePaths.value = next;
     lastSelectedFilePath.value =

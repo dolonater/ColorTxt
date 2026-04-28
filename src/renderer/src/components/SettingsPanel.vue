@@ -24,6 +24,8 @@ export type SettingsApplyPayload = {
   restoreSessionOnStartup: boolean;
   recentFilesHistoryLimit: number;
   fullscreenReaderWidthPercent: number;
+  /** Monaco 阅读区平滑滚动 */
+  monacoSmoothScrolling: boolean;
   fontSize: number;
   lineHeightMultiple: number;
   /** 压缩空行时是否在每行正文下方保留一行空行（章节标题行除外） */
@@ -42,6 +44,7 @@ const props = defineProps<{
   fullscreenReaderWidthPercent: number;
   readerFontSize: number;
   readerLineHeightMultiple: number;
+  monacoSmoothScrolling: boolean;
   compressBlankKeepOneBlank: boolean;
   monacoCustomHighlight: boolean;
   txtrDelimitedMatchCrossLine: boolean;
@@ -57,6 +60,7 @@ const draftRecentLimit = ref(20);
 const draftFullscreenReaderWidthPercent = ref(50);
 const draftFontSize = ref(14);
 const draftLineHeightMultiple = ref(1.5);
+const draftMonacoSmoothScrolling = ref(true);
 const draftCompressBlankKeepOneBlank = ref(false);
 const draftTxtrDelimitedMatchCrossLine = ref(false);
 const draftEbookConvertOutputDir = ref("");
@@ -75,6 +79,7 @@ watch(modelValue, (open) => {
     props.readerFontSize,
     props.readerLineHeightMultiple,
   );
+  draftMonacoSmoothScrolling.value = props.monacoSmoothScrolling;
   draftCompressBlankKeepOneBlank.value = props.compressBlankKeepOneBlank;
   draftTxtrDelimitedMatchCrossLine.value = props.txtrDelimitedMatchCrossLine;
   draftEbookConvertOutputDir.value = props.ebookConvertOutputDir;
@@ -96,6 +101,7 @@ function onConfirm() {
     restoreSessionOnStartup: draftRestore.value,
     recentFilesHistoryLimit: draftRecentLimit.value,
     fullscreenReaderWidthPercent: draftFullscreenReaderWidthPercent.value,
+    monacoSmoothScrolling: draftMonacoSmoothScrolling.value,
     fontSize: draftFontSize.value,
     lineHeightMultiple: draftLineHeightMultiple.value,
     compressBlankKeepOneBlank: draftCompressBlankKeepOneBlank.value,
@@ -248,6 +254,19 @@ async function onClearCache() {
         </div>
         <p class="settingsHint">
           仅在开启「内容上色」时生效，开启后引号和括号会跨行匹配；<br />如果出现大段非引号/括号内的文本被误上色，是因为原文没有正确关闭引号/括号，可禁用该选项以降低影响范围。
+        </p>
+      </div>
+
+      <div class="settingsRow">
+        <div class="settingsRowMain">
+          <span class="settingsLabel">平滑滚动</span>
+          <SwitchToggle
+            v-model="draftMonacoSmoothScrolling"
+            aria-label="阅读区平滑滚动"
+          />
+        </div>
+        <p class="settingsHint">
+          关闭后，阅读区滚动不再使用平滑动画。
         </p>
       </div>
 

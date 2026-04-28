@@ -282,20 +282,22 @@ button.link.primary {
 button.link.primary:not(:disabled):hover {
   color: var(--primary-hover);
 }
-button.link.warning {
+button.link.warning:not(.hoverMode),
+button.link.warning.hoverMode:not(:disabled):hover {
   color: var(--warning);
 }
 button.link.warning:not(:disabled):hover {
   color: var(--warning-hover);
 }
-button.link.success {
+button.link.success:not(.hoverMode),
+button.link.success.hoverMode:not(:disabled):hover {
   color: var(--success);
 }
 button.link.success:not(:disabled):hover {
   color: var(--success-hover);
 }
-button.link.danger,
-button.link.hoverDanger:not(:disabled):hover {
+button.link.danger:not(.hoverMode),
+button.link.danger.hoverMode:not(:disabled):hover {
   color: var(--danger);
 }
 button.link.danger:not(:disabled):hover {
