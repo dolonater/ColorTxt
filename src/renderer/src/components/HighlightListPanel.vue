@@ -217,12 +217,6 @@ function onRemoveHighlightTermClick(ev: MouseEvent, text: string) {
   padding: 0;
 }
 
-.sidebarTabFooterAction:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
 .sidebarTabFooterActions {
   flex: 0 0 auto;
   display: inline-flex;
