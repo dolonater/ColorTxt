@@ -5,12 +5,14 @@ withDefaults(
   defineProps<{
     currentFilePath: string | null;
     highlightTerms: Array<{ text: string; color: string; colorIndex: number }>;
+    hasInlineSearchHighlight?: boolean;
     highlightPreviewBg?: string;
     monacoFontFamily: string;
   }>(),
   {
     currentFilePath: null,
     highlightTerms: () => [],
+    hasInlineSearchHighlight: false,
     highlightPreviewBg: "var(--reader-bg, var(--bg))",
   },
 );
@@ -18,6 +20,7 @@ withDefaults(
 const emit = defineEmits<{
   findHighlightTerm: [text: string];
   removeHighlightTerm: [text: string];
+  clearInlineSearchHighlight: [];
   clearHighlights: [];
 }>();
 
@@ -38,6 +41,7 @@ function onRemoveHighlightTermClick(ev: MouseEvent, text: string) {
         <div
           v-for="item in highlightTerms"
           :key="`${item.colorIndex}-${item.text}`"
+          :title="'点击跳转到下一个：' + item.text"
           class="highlightItem"
           :style="{
             backgroundColor: highlightPreviewBg,
@@ -61,14 +65,26 @@ function onRemoveHighlightTermClick(ev: MouseEvent, text: string) {
       </div>
     </div>
     <div v-if="highlightTerms.length > 0" class="sidebarTabFooter">
-      <span class="sidebarTabFooterStat">共 {{ highlightTerms.length }} 个高亮词</span>
-      <button
-        type="button"
-        class="link danger hoverMode sidebarTabFooterAction"
-        @click="emit('clearHighlights')"
+      <span class="sidebarTabFooterStat"
+        >共 {{ highlightTerms.length }} 个高亮词</span
       >
-        清空
-      </button>
+      <div class="sidebarTabFooterActions">
+        <button
+          type="button"
+          class="link hoverMode sidebarTabFooterAction"
+          :disabled="!hasInlineSearchHighlight"
+          @click="emit('clearInlineSearchHighlight')"
+        >
+          清除定位
+        </button>
+        <button
+          type="button"
+          class="link danger hoverMode sidebarTabFooterAction"
+          @click="emit('clearHighlights')"
+        >
+          清空
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -199,5 +215,18 @@ function onRemoveHighlightTermClick(ev: MouseEvent, text: string) {
   flex: 0 0 auto;
   white-space: nowrap;
   padding: 0;
+}
+
+.sidebarTabFooterAction:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.sidebarTabFooterActions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 </style>

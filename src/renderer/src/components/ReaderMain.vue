@@ -1416,6 +1416,7 @@ defineExpose({
   jumpToLineCentered,
   jumpToSearchMatchCentered: inlineSearch.jumpToSearchMatchCentered,
   jumpToNextInlineSearchMatch: inlineSearch.jumpToNextInlineSearchMatch,
+  hasInlineSearchQuery: inlineSearch.hasInlineSearchQuery,
   jumpToBookmarkLine,
   setInlineSearchState: inlineSearch.setInlineSearchState,
   clearInlineSearchState: inlineSearch.clearInlineSearchState,

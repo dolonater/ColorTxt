@@ -218,6 +218,7 @@ const searchQuery = ref("");
 const searchResults = ref<SidebarSearchResult[]>([]);
 const searchInProgress = ref(false);
 const activeSearchResultPhysicalLine = ref<number | null>(null);
+const hasInlineSearchHighlight = ref(false);
 const searchMatchCase = ref(false);
 const searchWholeWord = ref(false);
 const searchUseRegex = ref(false);
@@ -1032,12 +1033,18 @@ async function clearCurrentFileHighlightTerms() {
 function onFindHighlightTermFromSidebar(text: string) {
   if (!currentFile.value || loading.value || totalLineCount.value <= 0) return;
   ensurePinBeforeRevealFindWidget();
-  readerRef.value?.jumpToNextInlineSearchMatch?.(text, {
+  const found = readerRef.value?.jumpToNextInlineSearchMatch?.(text, {
     caseSensitive: false,
     wholeWord: false,
     useRegex: false,
     smooth: true,
   });
+  hasInlineSearchHighlight.value = found === true;
+}
+
+function clearReaderInlineSearchHighlight() {
+  readerRef.value?.clearInlineSearchState?.();
+  hasInlineSearchHighlight.value = false;
 }
 
 function clearSidebarSearchState() {
@@ -1051,6 +1058,7 @@ function clearSidebarSearchState() {
     searchDebounceTimer = null;
   }
   readerRef.value?.clearInlineSearchState?.();
+  hasInlineSearchHighlight.value = false;
 }
 
 function isWordChar(ch: string): boolean {
@@ -1158,6 +1166,7 @@ function runSidebarSearch(token: number) {
     wholeWord: wholeWord,
     useRegex: useRegex,
   });
+  hasInlineSearchHighlight.value = next.length > 0;
   if (
     activeSearchResultPhysicalLine.value != null &&
     !next.some((it) => it.physicalLine === activeSearchResultPhysicalLine.value)
@@ -1178,6 +1187,7 @@ function scheduleSidebarSearch() {
     searchInProgress.value = false;
     activeSearchResultPhysicalLine.value = null;
     readerRef.value?.clearInlineSearchState?.();
+    hasInlineSearchHighlight.value = false;
     return;
   }
   const token = ++searchRunToken;
@@ -1225,6 +1235,7 @@ function onJumpToSearchResult(item: SidebarSearchResult) {
     wholeWord: searchWholeWord.value,
     useRegex: searchUseRegex.value,
   });
+  hasInlineSearchHighlight.value = true;
   readerRef.value?.jumpToSearchMatchCentered?.(
     displayLine,
     startColumn,
@@ -1240,6 +1251,7 @@ onBeforeUnmount(() => {
   }
   activeSearchResultPhysicalLine.value = null;
   readerRef.value?.clearInlineSearchState?.();
+  hasInlineSearchHighlight.value = false;
 });
 
 function applySettings(payload: SettingsApplyPayload) {
@@ -1521,6 +1533,7 @@ useAppShellThemeWatch({
           :search-whole-word="searchWholeWord"
           :search-use-regex="searchUseRegex"
           :active-search-result-physical-line="activeSearchResultPhysicalLine"
+          :has-inline-search-highlight="hasInlineSearchHighlight"
           :highlight-preview-bg="
             currentTheme === 'vs'
               ? readerSurfaceLight.readerBg
@@ -1549,6 +1562,7 @@ useAppShellThemeWatch({
           @edit-bookmark="onEditBookmark"
           @remove-bookmark="onRemoveBookmark"
           @find-highlight-term="onFindHighlightTermFromSidebar"
+          @clear-inline-search-highlight="clearReaderInlineSearchHighlight"
           @update:search-query="searchQuery = $event"
           @update:search-match-case="searchMatchCase = $event"
           @update:search-whole-word="searchWholeWord = $event"

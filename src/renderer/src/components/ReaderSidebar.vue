@@ -49,6 +49,7 @@ const props = withDefaults(
     searchWholeWord?: boolean;
     searchUseRegex?: boolean;
     activeSearchResultPhysicalLine?: number | null;
+    hasInlineSearchHighlight?: boolean;
     highlightPreviewBg?: string;
     monacoFontFamily?: string;
     bookmarks: Array<{ line: number; note?: string; content: string }>;
@@ -94,6 +95,7 @@ const props = withDefaults(
     searchWholeWord: false,
     searchUseRegex: false,
     activeSearchResultPhysicalLine: null,
+    hasInlineSearchHighlight: false,
     highlightPreviewBg: "var(--reader-bg, var(--bg))",
     monacoFontFamily: "",
   },
@@ -139,6 +141,7 @@ const emit = defineEmits<{
   openSettings: [];
   findHighlightTerm: [text: string];
   removeHighlightTerm: [text: string];
+  clearInlineSearchHighlight: [];
   clearHighlights: [];
   "update:searchQuery": [value: string];
   "update:searchMatchCase": [value: boolean];
@@ -435,10 +438,12 @@ defineExpose({
         v-show="activeTab === 'highlights'"
         :current-file-path="currentFilePath"
         :highlight-terms="highlightTerms"
+        :has-inline-search-highlight="hasInlineSearchHighlight"
         :highlight-preview-bg="highlightPreviewBg"
         :monaco-font-family="monacoFontFamily"
         @find-highlight-term="emit('findHighlightTerm', $event)"
         @remove-highlight-term="emit('removeHighlightTerm', $event)"
+        @clear-inline-search-highlight="emit('clearInlineSearchHighlight')"
         @clear-highlights="emit('clearHighlights')"
       />
       <SearchPanel
