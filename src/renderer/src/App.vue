@@ -868,8 +868,18 @@ const chapterNav = useAppChapterNavigation({
 });
 
 afterStreamFullTextInstalled = async () => {
-  await readerRef.value?.applyEmbeddedImageAnchors(physicalReaderPath.value);
+  const imgAnchors = await readerRef.value?.applyEmbeddedImageAnchors(
+    physicalReaderPath.value,
+  );
   readerRef.value?.applyEbookInternalLinkMarkers?.();
+  if (
+    imgAnchors?.deletedOriginalLineNumbersDesc?.length &&
+    compressBlankLines.value
+  ) {
+    stream.removeFilteredDisplayLinesAtOriginalIndices(
+      imgAnchors.deletedOriginalLineNumbersDesc,
+    );
+  }
   stream.resyncMirrorFromReader();
   chapterNav.rebuildChaptersFromCurrentText();
 };

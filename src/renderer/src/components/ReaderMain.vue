@@ -23,6 +23,7 @@ import { useReaderInlineSearch } from "../composables/useReaderInlineSearch";
 import {
   replaceImgAnchorLinesWithViewZones,
   removeViewZonesById,
+  type ReplaceImgAnchorsResult,
 } from "../monaco/readerImageViewZones";
 import {
   READER_EDITOR_DEFAULT_FONT_FAMILY,
@@ -745,17 +746,20 @@ function applyEbookInternalLinkMarkers() {
   ebookInternalLinkDecorationIds = e.deltaDecorations([], decs);
 }
 
-async function applyEmbeddedImageAnchors(convertedTxtAbsPath: string | null) {
+async function applyEmbeddedImageAnchors(
+  convertedTxtAbsPath: string | null,
+): Promise<ReplaceImgAnchorsResult> {
   disposeImageViewZones();
   imageLightboxSrc.value = "";
   const p = convertedTxtAbsPath?.trim();
-  if (!p) return;
+  if (!p) return { zoneIds: [], deletedOriginalLineNumbersDesc: [] };
   const e = editor.value;
-  if (!e) return;
-  const ids = await replaceImgAnchorLinesWithViewZones(monaco, e, p, {
+  if (!e) return { zoneIds: [], deletedOriginalLineNumbersDesc: [] };
+  const result = await replaceImgAnchorLinesWithViewZones(monaco, e, p, {
     zoneHeightPx: 100,
   });
-  imageViewZoneIds.value = ids;
+  imageViewZoneIds.value = result.zoneIds;
+  return result;
 }
 
 function clear(opts?: ReaderClearOptions) {
@@ -1039,6 +1043,15 @@ function getViewportLineSpan(): number {
 
 function getAllText(): string {
   return model.value?.getValue() ?? "";
+}
+
+/** Monaco 指定显示行（1-based）的文本，供物理行→显示行映射与正文比对 */
+function getEditorLineContent(lineNumber: number): string {
+  const m = model.value;
+  if (!m) return "";
+  const lc = m.getLineCount();
+  const ln = Math.max(1, Math.min(Math.floor(lineNumber), lc));
+  return m.getLineContent(ln);
 }
 
 function getSelectedText(): string {
@@ -1426,6 +1439,7 @@ defineExpose({
   getViewportTopLine,
   getViewportLineSpan,
   getAllText,
+  getEditorLineContent,
   getSelectedText,
   toggleFindWidget,
   closeFindWidgetIfRevealed,

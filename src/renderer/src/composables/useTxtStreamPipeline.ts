@@ -71,15 +71,35 @@ export function useTxtStreamPipeline(deps: {
     return filteredDisplayToPhysicalLine[idx]!;
   }
 
-  /** 滤空模式下将物理行映射为 Monaco 显示行（首个满足条件的行；书签等用） */
+  /**
+   * 滤空模式下将物理行映射为 Monaco 显示行。
+   * 同一物理行可能对应多行显示（章节标题前的留白、保留一空行等），
+   * `physicalLineToFilteredDisplayLine` 取首个 `map[i]>=p` 会落到留白行而非正文行；
+   * 此处在与当前 Monaco 正文比对一致时优先取「内容与 lineForReaderDisplay(物理行) 相同」的那一行。
+   */
   function physicalLineToDisplayForReader(physicalLine: number): number {
     if (!deps.compressBlankLines.value) {
       return Math.max(1, Math.floor(physicalLine));
     }
-    return physicalLineToFilteredDisplayLine(
-      physicalLine,
-      filteredDisplayToPhysicalLine,
-    );
+    const map = filteredDisplayToPhysicalLine;
+    const p = Math.max(1, Math.floor(physicalLine));
+    const raw = physicalLineContents[p - 1] ?? "";
+    const wantShown = lineForReaderDisplay(raw);
+
+    if (wantShown.length > 0) {
+      const reader = deps.readerRef.value;
+      const getEditorLineContent = reader?.getEditorLineContent;
+      if (reader && typeof getEditorLineContent === "function") {
+        for (let i = 0; i < map.length; i++) {
+          if (map[i] !== p) continue;
+          if (getEditorLineContent.call(reader, i + 1) === wantShown) {
+            return i + 1;
+          }
+        }
+      }
+    }
+
+    return physicalLineToFilteredDisplayLine(p, map);
   }
 
   /**
@@ -416,6 +436,26 @@ export function useTxtStreamPipeline(deps: {
     syncMirrorFromReaderModel();
   }
 
+  /**
+   * `replaceImgAnchorLinesWithViewZones` 删除插图占位行前，`filteredDisplayToPhysicalLine` 仍对应删行前总行数；
+   * 须在压缩空行模式下按删行前 1-based Monaco 行号（降序）从映射表中移除同名条目，保持与正文行数一致。
+   */
+  function removeFilteredDisplayLinesAtOriginalIndices(
+    deletedOriginalLineNumbersDesc: readonly number[],
+  ) {
+    if (!deps.compressBlankLines.value || deletedOriginalLineNumbersDesc.length === 0) {
+      return;
+    }
+    for (const lineNum of deletedOriginalLineNumbersDesc) {
+      const idx = Math.floor(lineNum) - 1;
+      if (idx >= 0 && idx < filteredDisplayToPhysicalLine.length) {
+        filteredDisplayToPhysicalLine.splice(idx, 1);
+      }
+    }
+    lineCount = filteredDisplayToPhysicalLine.length;
+    deps.totalLineCount.value = lineCount;
+  }
+
   return {
     processChunk,
     flushCarry,
@@ -430,5 +470,6 @@ export function useTxtStreamPipeline(deps: {
     getPhysicalLineContent,
     setChapterWriteIndex,
     resyncMirrorFromReader,
+    removeFilteredDisplayLinesAtOriginalIndices,
   };
 }

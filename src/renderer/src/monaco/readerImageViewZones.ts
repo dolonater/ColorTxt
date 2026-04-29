@@ -4,6 +4,12 @@ import { dirnameFs, joinFs } from "../ebook/pathUtils";
 /** 整行匹配；路径内不得含 `>` */
 export const READER_IMG_ANCHOR_LINE_RE = /^\s*<<IMG:([^>]+)>>\s*$/;
 
+/** `replaceImgAnchorLinesWithViewZones` 返回：插图 View Zone id，以及删行前 Monaco 行号（降序，便于与滤空映射同步 splice） */
+export type ReplaceImgAnchorsResult = {
+  zoneIds: string[];
+  deletedOriginalLineNumbersDesc: number[];
+};
+
 function joinUnderDir(dirAbs: string, relativePosix: string): string {
   let out = dirAbs;
   for (const seg of relativePosix.replace(/\\/g, "/").split("/").filter(Boolean)) {
@@ -60,9 +66,9 @@ export async function replaceImgAnchorLinesWithViewZones(
     zoneHeightPx: number;
     onZonesChange?: (zoneIds: string[]) => void;
   },
-): Promise<string[]> {
+): Promise<ReplaceImgAnchorsResult> {
   const model = editor.getModel();
-  if (!model) return [];
+  if (!model) return { zoneIds: [], deletedOriginalLineNumbersDesc: [] };
   /** 闭包内 TS 不保留 `model` 非空收窄，用局部常量绑定 */
   const doc = model;
   const txtDir = dirnameFs(convertedTxtAbsPath.replace(/\\/g, "/"));
@@ -76,7 +82,12 @@ export async function replaceImgAnchorLinesWithViewZones(
       matches.push({ line: L, rel: m[1].trim() });
     }
   }
-  if (matches.length === 0) return [];
+  if (matches.length === 0)
+    return { zoneIds: [], deletedOriginalLineNumbersDesc: [] };
+
+  const deletedOriginalLineNumbersDesc = matches
+    .map((x) => x.line)
+    .sort((a, b) => b - a);
 
   const imgLineSet = new Set(matches.map((x) => x.line));
 
@@ -171,7 +182,7 @@ export async function replaceImgAnchorLinesWithViewZones(
     }
   });
   options.onZonesChange?.(zoneIds);
-  return zoneIds;
+  return { zoneIds, deletedOriginalLineNumbersDesc };
 }
 
 export function removeViewZonesById(

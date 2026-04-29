@@ -159,7 +159,7 @@ src/
 │       │   ├── useFileListCategorySort.ts # 文件列表：分类下拉（`AppCustomSelect`）的固定项/滚动项/计数与触发器文案；`FileSortMode` 与 `constants/fileCategories` 对齐
 │       │   ├── useFileListSelection.ts    # 文件列表「编辑模式」：多选路径、`Ctrl+A` / 反选、与列表焦点区配合；选中集随列表变化裁剪
 │       │   ├── useFileListMenus.ts        # 文件列表右键菜单、编辑模式菜单、**分类浮层**（`CategoryPickerMenu`）坐标与 `setFilesCategory` 派发
-│       │   └── useTxtStreamPipeline.ts    # 大文件流式解析：物理行/显示行映射、章节累加、空行压缩与章节留白标准化；正文在缓冲区累积，流结束再一次性 setFullText/setChapters（见 `ipcHandlers` 小节「渲染进程与 Monaco 写入」）
+│       │   └── useTxtStreamPipeline.ts    # 大文件流式解析：物理行/显示行映射、章节累加、空行压缩与章节留白标准化；同一物理行对应多显示行时优先匹配正文行（避免跳到章节留白）；插图锚点删行后同步收缩映射表；正文在缓冲区累积，流结束再一次性 setFullText/setChapters（见 `ipcHandlers` 小节「渲染进程与 Monaco 写入」）
 │       ├── constants/
 │       │   ├── appUi.ts          # UI 常量：存储 key、侧栏宽度、字号/行高上下限与步进、`default*` 出厂默认等（无本地设置或与 `persistKey` 字段缺失时；见下文「阅读器字号与行高」「界面与阅读偏好默认值」）；re-export `readerPalette` 的 `applyReaderSurfaceToDocument` 等
 │       │   ├── readerPalette.ts  # 阅读器表面色（背景、章节标题、Monaco txtr token）默认值与合并逻辑；用户覆盖存 `colorTxt.ui.settings` 的 `readerPaletteOverridesLight` / `readerPaletteOverridesDark`；`useAppShellThemeWatch` 写入 `html` 的 `--reader-bg`、`--reader-chapter-title`
@@ -169,7 +169,7 @@ src/
 │       │   ├── chapterStickyScroll.ts    # 注册折叠区与文档符号以驱动黏性章节大纲；禁用黏性条点击跳转
 │       │   ├── readerEditorOptions.ts    # 阅读器 `create` / `updateOptions` 的选项构建（换行、只读、查找、stickyScroll 等）
 │       │   ├── readerInlineDecorations.ts # 章节标题行内装饰；合并 `readerPalette` 与 **`highlightColors`** 生成 Monarch token 规则；自定义高亮词开启时并入 `txtrHighlightMonarch` 生成的规则
-│       │   ├── readerImageViewZones.ts   # 插图行 `<<IMG:…>>` 的 ViewZone 与内嵌展示；与 `colortxt://` 本地资源协议衔接
+│       │   ├── readerImageViewZones.ts   # 插图行 `<<IMG:…>>` 的 ViewZone 与内嵌展示；返回删行前行号供流管道同步映射；与 `colortxt://` 本地资源协议衔接
 │       │   ├── readerKeyScroll.ts        # 方向键/Page 键滚动
 │       │   ├── txtrHighlightMonarch.ts   # 由 `highlightWordsByIndex` 生成 `txtr.customHighlight.{index}` 类 Monarch 规则（更长词优先、同长则更小颜色索引优先；大小写不敏感）
 │       │   └── txtrTextMonarch.ts        # 自定义 Monarch：`txtr-text` 语言；标点/对话/数字等着色；可选注入上述自定义高亮规则
@@ -312,7 +312,7 @@ src/
 | `ChapterListPanel.vue`                               | 侧栏「章节」：章节列表、字数开关、跳转当前章                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `BookmarkListPanel.vue`                              | 侧栏「书签」：书签列表、跳转、编辑与清除                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `HighlightListPanel.vue`                             | 侧栏「高亮词」：展示当前文件高亮词，支持删除与点击定位（通过内联搜索流转）                                                                                                                                                                                                                                                                                                                                                                                            |
-| `SearchPanel.vue`                                    | 侧栏「搜索」：当前文件内搜索、结果列表与命中跳转                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `SearchPanel.vue`                                    | 侧栏「搜索」：当前文件内搜索、结果列表与命中跳转；点击项按物理行映射到当前显示行并居中定位（压缩空行时对齐正文行）                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `FileCategoryFlyoutList.vue`                         | 文件列表分类子菜单：统一渲染右键分类 flyout 与批量分类入口的选项（含计数）                                                                                                                                                                                                                                                                                                                                                                                            |
 | `FontPicker.vue`                                     | 预设字体（跨平台映射，逻辑见 `presetFontDefinitions.ts`）与系统字体列表                                                                                                                                                                                                                                                                                                                                                                                               |
 | `ChapterRulePanel.vue` / `ChapterRuleEditDialog.vue` | 章节匹配规则列表与编辑                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -388,7 +388,7 @@ src/
 
 `ReaderMain.vue` 在载入正文后调用 `stripEbookIdAndAMarkersFromText`：去掉 `<<ID:…>>`、将 `<<A:…>>` 替换为可见文案，并建立 `id → 物理行`、内链点击区间与「行首链内标签」映射；与压缩空行配合时使用 `ebookDisplayLineToPhysical` / `ebookAnchorPhysicalToDisplay`（见 `reader/ebookAnchorLookup.ts`）。章节检测侧用 `leadingEbookLinkLabelsByLine` 识别**假章节**（标题以链内链接文案为前缀时跳过）。
 
-插图行 **`<<IMG:…>>`** 由 `monaco/readerImageViewZones.ts` 等与 `pathUtils`（POSIX 风格片段拼接）配合展示，依赖 `colortxt://` 本地协议访问写出后的图片文件。
+插图行 **`<<IMG:…>>`** 由 `monaco/readerImageViewZones.ts` 等与 `pathUtils`（POSIX 风格片段拼接）配合展示，依赖 `colortxt://` 本地协议访问写出后的图片文件。该阶段会从 Monaco 正文中删除插图锚点独占行，并返回“删行前的 Monaco 行号（降序）”；`useTxtStreamPipeline.removeFilteredDisplayLinesAtOriginalIndices` 在压缩空行模式下据此同步裁剪 `filteredDisplayToPhysicalLine`，避免映射长度与正文行数不一致导致的搜索/恢复错位。
 
 ### 目录与文件速查
 
