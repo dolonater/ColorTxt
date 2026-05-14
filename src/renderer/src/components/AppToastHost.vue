@@ -14,6 +14,8 @@ function iconHtml(kind: AppToastItem["kind"]): string {
       return icons.warning;
     case "danger":
       return icons.fail;
+    case "primary":
+      return icons.info;
     case "info":
     default:
       return icons.info;
