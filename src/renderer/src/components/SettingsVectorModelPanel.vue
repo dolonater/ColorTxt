@@ -2,7 +2,9 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { AIConfig } from "@shared/aiTypes";
 import AppCustomSelect, { type CustomSelectItem } from "./AppCustomSelect.vue";
-import AppPullFlashButton, { type AppPullFlashDone } from "./AppPullFlashButton.vue";
+import AppPullFlashButton, {
+  type AppPullFlashDone,
+} from "./AppPullFlashButton.vue";
 import NumericInput from "./NumericInput.vue";
 import SwitchToggle from "./SwitchToggle.vue";
 import { icons } from "../icons";
@@ -16,7 +18,9 @@ type AiTestPhase = "idle" | "pending" | "ok" | "fail";
 
 const showEmbedKey = ref(false);
 const embedModelsLoading = ref(false);
-const embedPullBtnRef = ref<InstanceType<typeof AppPullFlashButton> | null>(null);
+const embedPullBtnRef = ref<InstanceType<typeof AppPullFlashButton> | null>(
+  null,
+);
 const embedTestPhase = ref<AiTestPhase>("idle");
 const embedModelOptions = ref<string[]>([]);
 type EmbedProbeFlashPhase = "idle" | "loading" | "success" | "fail";
@@ -110,7 +114,7 @@ async function probeEmbedDimension(opts?: { auto?: boolean }) {
   const baseUrl = modelValue.value.embedding.baseUrl.trim();
   const model = modelValue.value.embedding.model.trim();
   if (!baseUrl || !model) {
-    if (!auto) await appAlert("请先填写 Embedding Base URL 与模型。");
+    if (!auto) await appAlert("请先填写接口地址并选择模型");
     return;
   }
   if (embedProbeFlashTimer != null) {

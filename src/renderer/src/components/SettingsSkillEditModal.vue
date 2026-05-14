@@ -57,7 +57,7 @@ function onCancel() {
 async function onSave() {
   const title = titleField.value.trim();
   if (!titleLocked.value && !title) {
-    await appAlert("请填写技能名称。");
+    await appAlert("技能名称不能为空");
     return;
   }
   emit("save", {

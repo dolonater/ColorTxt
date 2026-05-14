@@ -23,6 +23,7 @@ import AppToastHost from "./components/AppToastHost.vue";
 import AppOverlays from "./components/AppOverlays.vue";
 import type { SettingsApplyPayload } from "./components/SettingsPanel.vue";
 import type { AiCustomSkill, AiSkillUserOverride } from "@shared/aiSkills";
+import type { ColorTxtShowMessageBoxOptions } from "@shared/colorTxtShowMessageBox";
 import type {
   CharacterBookStylePersisted,
   CharacterRosterEntry,
@@ -111,7 +112,8 @@ import {
   createDefaultShortcutBindings,
   type ShortcutBindingMap,
 } from "./services/shortcutRegistry";
-import { appAlert, appConfirm } from "./services/appDialog";
+import { appAlert } from "./services/appDialog";
+import { appToast } from "./services/appToast";
 import { mergeShortcutBindings } from "./services/shortcutUtils";
 import {
   syncTxtFilesCategoriesAfterCatalogEdit,
@@ -542,12 +544,28 @@ const readerEditMode = ref(false);
 const readerEditorDirty = ref(false);
 const readerSaveEncoding = ref("utf8");
 
+/** 切书、关文件、编辑↔只读、关窗、退出应用等场景共用 */
+const readerEditDiscardUnsavedMessageBox: ColorTxtShowMessageBoxOptions = {
+  type: "warning",
+  title: "修改未保存",
+  buttons: ["取消", "确定"],
+  defaultId: 0,
+  cancelId: 0,
+  message: "当前文件已修改但尚未保存，确定要放弃这些改动吗？",
+  noLink: true,
+};
+
+async function confirmReaderEditDiscardUnsaved(): Promise<boolean> {
+  if (!window.colorTxt?.showMessageBox) return false;
+  const r = await window.colorTxt.showMessageBox(
+    readerEditDiscardUnsavedMessageBox,
+  );
+  return r.response === 1;
+}
+
 async function confirmIfReaderEditDiscard(): Promise<boolean> {
   if (!readerEditMode.value || !readerEditorDirty.value) return true;
-  return appConfirm(
-    "当前正文的修改尚未保存，确定放弃这些更改？",
-    "未保存的修改",
-  );
+  return confirmReaderEditDiscardUnsaved();
 }
 
 let afterStreamFullTextInstalled: () => void | Promise<void> = async () => {};
@@ -1065,11 +1083,7 @@ function applyChaptersFromReaderPlainText() {
 async function onToggleReaderEdit() {
   if (readerEditMode.value) {
     if (readerEditorDirty.value) {
-      const ok = await appConfirm(
-        "当前正文的修改尚未保存，确定切换回只读模式？未保存的更改将丢失。",
-        "未保存的修改",
-      );
-      if (!ok) return;
+      if (!(await confirmReaderEditDiscardUnsaved())) return;
     }
     readerEditMode.value = false;
     readerEditorDirty.value = false;
@@ -1094,7 +1108,7 @@ async function onToggleReaderEdit() {
     }
   } else {
     if (!canEnterReaderEditMode.value) {
-      void appAlert("请等待当前文件加载完成后再进入编辑模式。");
+      appToast("请等待当前文件加载完成后再进入编辑模式。");
       return;
     }
     readerEditMode.value = true;
@@ -1133,11 +1147,7 @@ function onReaderEditDirtyChange(dirty: boolean) {
 
 async function handleWindowCloseRequest() {
   if (readerEditMode.value && readerEditorDirty.value) {
-    const ok = await appConfirm(
-      "当前正文的修改尚未保存，确定关闭窗口？",
-      "未保存的修改",
-    );
-    if (!ok) return;
+    if (!(await confirmReaderEditDiscardUnsaved())) return;
   }
   window.colorTxt.proceedCloseWindow();
 }
@@ -1222,11 +1232,7 @@ function revealCurrentFileInFolder() {
 function quitApp() {
   void (async () => {
     if (readerEditMode.value && readerEditorDirty.value) {
-      const ok = await appConfirm(
-        "当前正文的修改尚未保存，确定退出应用？",
-        "未保存的修改",
-      );
-      if (!ok) return;
+      if (!(await confirmReaderEditDiscardUnsaved())) return;
     }
     window.colorTxt.quitApp();
   })();

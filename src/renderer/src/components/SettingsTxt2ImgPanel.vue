@@ -101,7 +101,7 @@ async function refreshSamplers(opts?: { pullDone?: AppPullFlashDone }) {
     return;
   }
   if (!modelValue.value.txt2img.apiBaseUrl.trim()) {
-    if (pullDone) await appAlert("请先填写文生图接口地址。");
+    if (pullDone) await appAlert("请先填写文生图接口地址");
     pullDone?.("abort");
     return;
   }
@@ -174,8 +174,7 @@ const sdCheckpointScrollItems = computed((): CustomSelectItem[] => {
   }
   const cur = normCkpt(modelValue.value.txt2img.sdCheckpointTitle);
   const inList =
-    cur !== "" &&
-    sdModelOptions.value.some((t) => normCkpt(t) === cur);
+    cur !== "" && sdModelOptions.value.some((t) => normCkpt(t) === cur);
   if (cur && !inList) {
     return [head, { kind: "item" as const, id: cur, label: cur }, ...fromApi];
   }
@@ -200,7 +199,7 @@ async function refreshSdModels(opts?: { pullDone?: AppPullFlashDone }) {
     return;
   }
   if (!modelValue.value.txt2img.apiBaseUrl.trim()) {
-    if (pullDone) await appAlert("请先填写文生图接口地址。");
+    if (pullDone) await appAlert("请先填写文生图接口地址");
     pullDone?.("abort");
     return;
   }
@@ -329,7 +328,7 @@ async function refreshUpscalers(opts?: { pullDone?: AppPullFlashDone }) {
     return;
   }
   if (!modelValue.value.txt2img.apiBaseUrl.trim()) {
-    if (pullDone) await appAlert("请先填写文生图接口地址。");
+    if (pullDone) await appAlert("请先填写文生图接口地址");
     pullDone?.("abort");
     return;
   }

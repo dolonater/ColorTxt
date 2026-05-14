@@ -279,8 +279,7 @@ const historyDropWidth = ref(280);
 const chatModelPanelOpen = ref(false);
 
 watch(
-  () =>
-    historyOpen.value || exportMenuOpen.value || chatModelPanelOpen.value,
+  () => historyOpen.value || exportMenuOpen.value || chatModelPanelOpen.value,
   (v) => {
     emit("update:fullscreenAiAssistantPopoversOpen", v);
   },
@@ -884,10 +883,6 @@ async function requestRebuildVectorIndex(): Promise<void> {
     );
     return;
   }
-  if (!bookHash.value || !props.readerMainRef?.getAllText?.()) {
-    await appAlert("请先打开一本书。");
-    return;
-  }
   if (isAiVectorIndexPhaseBusy()) {
     appToast("索引任务正在进行中，请稍候。", {
       kind: "primary",
@@ -895,7 +890,7 @@ async function requestRebuildVectorIndex(): Promise<void> {
     return;
   }
   if (chatAwaitingReply.value || streaming.value) {
-    await appAlert("对话进行中，请先停止或等待完成后再重建索引。");
+    appToast("对话正在进行中，请先停止或等待完成后再重建索引。");
     return;
   }
   activeRequestId.value += 1;
@@ -907,7 +902,6 @@ async function requestRebuildVectorIndex(): Promise<void> {
       indexPhase.value = "error";
       indexError.value = "索引未完成。";
     }
-    /** 失败文案已由 `indexBanner`（phase=error）展示，不再 `appAlert`，避免与聊天区重复 */
   } catch (e) {
     if (isAiVectorIndexAbortError(e) || ac.signal.aborted) return;
     indexPhase.value = "error";
@@ -1418,7 +1412,7 @@ async function copyAllMarkdown() {
       ),
     );
   } catch {
-    await appAlert("复制失败：剪贴板不可用");
+    appToast("复制失败：剪贴板不可用");
   }
 }
 
@@ -1440,7 +1434,7 @@ async function copyAllMarkdownWithReasoning() {
       ),
     );
   } catch {
-    await appAlert("复制失败：剪贴板不可用");
+    appToast("复制失败：剪贴板不可用");
   }
 }
 
@@ -1509,7 +1503,7 @@ async function onChClick(chapterIndexZeroBased: number) {
   const ch = props.chapters[chapterIndexZeroBased];
   if (ch) emit("jumpToChapter", ch);
   else
-    await appAlert(
+    appToast(
       `未找到第 ${chapterIndexZeroBased + 1} 章（chapterIndex=${chapterIndexZeroBased}）`,
     );
 }

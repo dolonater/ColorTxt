@@ -252,10 +252,6 @@ const characterPortraitOpenDirDisabled = computed(() => {
 async function onOpenCharacterPortraitBookDir() {
   const sp =
     props.currentFilePath?.trim() || props.physicalReaderPath?.trim() || "";
-  if (!sp) {
-    void appAlert("请先打开一本书。");
-    return;
-  }
   const rootRaw = props.characterPortraitCacheDir?.trim() ?? "";
   const root = rootRaw
     ? rootRaw
