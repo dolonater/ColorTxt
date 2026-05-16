@@ -366,8 +366,8 @@ const pitchDisabled = computed(
               v-if="previewDownload"
               class="voiceReadPreviewDownloadBtn"
               :icon-html="icons.download"
-              title="下载试听音频"
-              aria-label="下载试听音频"
+              title="保存试听音频"
+              aria-label="保存试听音频"
               large
               @click="onPreviewDownload"
             />

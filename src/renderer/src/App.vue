@@ -340,11 +340,12 @@ const showReaderBusyHint = computed(
     loading.value && totalLineCount.value === 0 && totalCharCount.value === 0,
 );
 const readerBusyHintText = computed(() => readerTxtLoadingHintText);
-/** 已打开文件且流式加载完成、正文行数与字数均为 0 时居中提示 */
+/** 已打开文件且流式加载完成、正文行数与字数均为 0 时居中提示（仅只读；编辑模式不遮挡空白编辑区） */
 const showReaderEmptyHint = computed(
   () =>
     Boolean(currentFile.value) &&
     !loading.value &&
+    !readerEditMode.value &&
     totalCharCount.value === 0 &&
     totalLineCount.value === 0,
 );

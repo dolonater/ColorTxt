@@ -1862,6 +1862,8 @@ onMounted(() => {
         !props.readerEditMode && !props.voiceReadScrollLocked,
     });
     const d4 = e.onContextMenu((mouseEv) => {
+      // 编辑模式使用 Monaco 自带右键菜单，避免与自定义「复制」菜单重叠
+      if (props.readerEditMode) return;
       const m = model.value;
       if (!m) return;
       const sel = e.getSelection();
@@ -1965,6 +1967,7 @@ watch(
   () => [props.readerEditMode, props.physicalReaderPath] as const,
   async ([edit, physRaw]) => {
     const phys = physRaw?.trim() ?? "";
+    if (edit) closeEditorContextMenu();
     if (!edit) {
       teardownReaderEditContentListener();
       readerEditLoadedPhysicalKey = "";
